@@ -21,7 +21,7 @@ GOOGLE_SHEETS_ENABLED=true
 GOOGLE_SPREADSHEET_ID=試算表_ID
 GOOGLE_WORKSHEET_NAME=OpenSearch Logs
 GOOGLE_AUTH_MODE=service-account
-GOOGLE_CREDENTIALS_FILE=C:\path\to\google-service-account.json
+GOOGLE_CREDENTIALS_FILE=/path/to/google-service-account.json
 GOOGLE_WRITE_MODE=upsert
 GOOGLE_BATCH_SIZE=100
 ```
@@ -35,7 +35,7 @@ https://docs.google.com/spreadsheets/d/<SPREADSHEET_ID>/edit
 執行：
 
 ```powershell
-open-search-scrape --environment QA --keyword groove --google-sheets
+open-search --env QA --keyword groove --google-sheets
 ```
 
 CLI 會先保留 Markdown，再寫入 Google Sheet。Sheet 寫入失敗不應造成 Markdown 遺失。
@@ -135,5 +135,5 @@ GOOGLE_SHEETS_ENABLED=false
 也可以在單次執行使用：
 
 ```powershell
-open-search-scrape --environment QA --keyword groove --no-google-sheets
+open-search --env QA --keyword groove --no-google-sheets
 ```

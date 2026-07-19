@@ -76,22 +76,27 @@ def test_query_slug() -> None:
 
 
 def test_cli_defaults_to_fifty_records() -> None:
-    args = build_parser().parse_args(["--environment", "QA", "--keyword", "groove"])
+    args = build_parser().parse_args(["--env", "QA", "--keyword", "groove"])
     assert args.max_records == 50
 
 
-def test_google_sheets_is_disabled_by_default() -> None:
+def test_cli_keeps_environment_alias_for_compatibility() -> None:
     args = build_parser().parse_args(["--environment", "QA", "--keyword", "groove"])
+    assert args.environment == "QA"
+
+
+def test_google_sheets_is_disabled_by_default() -> None:
+    args = build_parser().parse_args(["--env", "QA", "--keyword", "groove"])
     assert Settings().google_sheets_enabled is False
     assert args.google_sheets is None
 
 
 def test_google_sheets_cli_switches() -> None:
     enabled = build_parser().parse_args(
-        ["--environment", "QA", "--keyword", "groove", "--google-sheets"]
+        ["--env", "QA", "--keyword", "groove", "--google-sheets"]
     )
     disabled = build_parser().parse_args(
-        ["--environment", "QA", "--keyword", "groove", "--no-google-sheets"]
+        ["--env", "QA", "--keyword", "groove", "--no-google-sheets"]
     )
     assert enabled.google_sheets is True
     assert disabled.google_sheets is False
@@ -133,7 +138,7 @@ def test_google_sheets_dry_run_opens_sheet_without_writing(monkeypatch) -> None:
     )
 
     exit_code = main(
-        ["--environment", "QA", "--keyword", "groove", "--google-sheets", "--dry-run"]
+        ["--env", "QA", "--keyword", "groove", "--google-sheets", "--dry-run"]
     )
 
     assert exit_code == 0
@@ -156,7 +161,7 @@ def test_zero_opensearch_results_fail_before_outputs(monkeypatch, capsys) -> Non
     monkeypatch.setattr("cli.GoogleSheetsWriter", unexpected_output)
     monkeypatch.setattr("cli.webbrowser.open", unexpected_output)
 
-    exit_code = main(["--environment", "QA", "--keyword", "missing-log"])
+    exit_code = main(["--env", "QA", "--keyword", "missing-log"])
 
     captured = capsys.readouterr()
     assert exit_code == 1

@@ -95,19 +95,19 @@ python -m playwright install chromium
 ### Windows CMD
 
 ```cmd
-open-search-scrape --environment QA --keyword groove
-open-search-scrape --environment staging --keyword groove --keyword cs20260716071044
-open-search-scrape --environment QA --keyword groove or cs20260716071044
-open-search-scrape --environment QA --keyword groove and cs20260716071044
-open-search-scrape --environment QA --keyword groove or cs20260716071044 --dry-run
-open-search-scrape --environment QA --keyword groove --google-sheets
+open-search --env QA --keyword groove
+open-search --env staging --keyword groove --keyword cs20260716071044
+open-search --env QA --keyword groove or cs20260716071044
+open-search --env QA --keyword groove and cs20260716071044
+open-search --env QA --keyword groove or cs20260716071044 --dry-run
+open-search --env QA --keyword groove --google-sheets
 ```
 
 多行指令使用 `^`：
 
 ```cmd
-open-search-scrape ^
-  --environment QA ^
+open-search ^
+  --env QA ^
   --keyword casinoGate ^
   --max-records 50 ^
   --no-open-output
@@ -116,16 +116,16 @@ open-search-scrape ^
 ### Windows PowerShell
 
 ```powershell
-open-search-scrape --environment QA --keyword groove
-open-search-scrape --environment staging --keyword groove --keyword cs20260716071044
-open-search-scrape --environment QA --keyword groove or cs20260716071044 --dry-run
+open-search --env QA --keyword groove
+open-search --env staging --keyword groove --keyword cs20260716071044
+open-search --env QA --keyword groove or cs20260716071044 --dry-run
 ```
 
 多行指令使用反引號 `` ` ``：
 
 ```powershell
-open-search-scrape `
-  --environment QA `
+open-search `
+  --env QA `
   --keyword casinoGate `
   --max-records 50 `
   --no-open-output
@@ -134,18 +134,18 @@ open-search-scrape `
 ### macOS Terminal
 
 ```bash
-open-search-scrape --environment QA --keyword groove
-open-search-scrape --environment staging --keyword groove --keyword cs20260716071044
-open-search-scrape --environment QA --keyword A or B
-open-search-scrape --environment QA --keyword groove and cs20260716071044 --dry-run
-open-search-scrape --environment QA --keyword groove --google-sheets
+open-search --env QA --keyword groove
+open-search --env staging --keyword groove --keyword cs20260716071044
+open-search --env QA --keyword A or B
+open-search --env QA --keyword groove and cs20260716071044 --dry-run
+open-search --env QA --keyword groove --google-sheets
 ```
 
 多行指令使用反斜線 `\`：
 
 ```bash
-open-search-scrape \
-  --environment QA \
+open-search \
+  --env QA \
   --keyword casinoGate \
   --max-records 50 \
   --no-open-output
@@ -181,7 +181,7 @@ open-search-scrape \
 可單獨測試 Sheet 開啟功能：
 
 ```powershell
-open-search-scrape --environment QA --keyword groove --google-sheets --dry-run
+open-search --env QA --keyword groove --google-sheets --dry-run
 ```
 
 如果 OpenSearch 明確顯示查詢結果為 0 筆，程式會回報
@@ -197,13 +197,13 @@ CLI 查詢預設使用 headless 模式，不會顯示 Playwright 瀏覽器視窗
 Google Sheets **預設關閉**。一般執行只會產生 Markdown，不會連線或寫入 Google Sheet：
 
 ```powershell
-open-search-scrape --environment QA --keyword groove
+open-search --env QA --keyword groove
 ```
 
 單次執行需要同步寫入時，加上 `--google-sheets`：
 
 ```powershell
-open-search-scrape --environment QA --keyword groove --google-sheets
+open-search --env QA --keyword groove --google-sheets
 ```
 
 Google Sheets 寫入成功後，程式會自動用系統預設瀏覽器開啟該 Sheet。
@@ -211,7 +211,7 @@ Google Sheets 寫入成功後，程式會自動用系統預設瀏覽器開啟該
 若 `.env` 已設定 `GOOGLE_SHEETS_ENABLED=true`，可以用 `--no-google-sheets` 暫停單次寫入：
 
 ```powershell
-open-search-scrape --environment QA --keyword groove --no-google-sheets
+open-search --env QA --keyword groove --no-google-sheets
 ```
 
 永久預設值由 `.env` 控制：
@@ -230,13 +230,13 @@ CLI 參數優先於 `.env`：`--google-sheets` 強制開啟，`--no-google-sheet
 Windows CMD／PowerShell：
 
 ```powershell
-open-search-scrape --clear-log
+open-search --clear-log
 ```
 
 macOS Terminal：
 
 ```bash
-open-search-scrape --clear-log
+open-search --clear-log
 ```
 
 CLI 也接受底線形式 `--clear_log`。若尚未安裝 console script，Windows 或 macOS 都可使用模組方式：
@@ -248,13 +248,13 @@ python -m cli --clear-log
 指定其他輸出資料夾：
 
 ```text
-open-search-scrape --clear-log --output-dir output
+open-search --clear-log --output-dir output
 ```
 
 和查詢參數一起使用時，會先清空再執行抓取：
 
 ```text
-open-search-scrape --clear-log --environment QA --keyword groove
+open-search --clear-log --env QA --keyword groove
 ```
 
 安全保護會拒絕清空專案目前目錄、使用者家目錄、磁碟根目錄及符號連結指向的目錄。
@@ -262,10 +262,10 @@ open-search-scrape --clear-log --environment QA --keyword groove
 若 CLI 指令尚未加入 PATH，Windows CMD／PowerShell 與 macOS 都可以使用模組方式：
 
 ```text
-python -m cli --environment QA --keyword groove --max-records 50
+python -m cli --env QA --keyword groove --max-records 50
 ```
 
-未提供 `--environment` 或 `--keyword` 時，CLI 會進入互動輸入模式。
+未提供 `--env` 或 `--keyword` 時，CLI 會進入互動輸入模式。
 
 `--max-records` 預設為 `50`，避免一次查詢及下載過多 log。需要更多資料時，請明確指定較大的數值；仍建議搭配較窄的時間範圍使用。
 

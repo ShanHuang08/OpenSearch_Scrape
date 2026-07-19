@@ -37,28 +37,28 @@ C:\Users\Shan\Workspace2\OpenSearch_Scrape\README.md#執行
 OpenSearch_Scrape 支援以下 CLI：
 
 ```powershell
-open-search-scrape --environment QA --keyword groove
-open-search-scrape --environment staging --keyword groove --keyword cs20260716071044
-open-search-scrape --environment QA --keyword groove or cs20260716071044
-open-search-scrape --environment QA --keyword groove and cs20260716071044
+open-search --env QA --keyword groove
+open-search --env staging --keyword groove --keyword cs20260716071044
+open-search --env QA --keyword groove or cs20260716071044
+open-search --env QA --keyword groove and cs20260716071044
 ```
 
 如果 CLI 指令尚未加入 PATH，也可以使用 module 方式：
 
 ```powershell
-python -m opensearch_scrape --environment QA --keyword groove --max-records 50
+python -m cli --env QA --keyword groove --max-records 50
 ```
 
 建議 web API 使用 module 方式。正式搜尋不要加 `--no-open-output`，讓 OpenSearch_Scrape 依照自己的預設行為，在產生 Markdown 後自動用系統預設瀏覽器開啟：
 
 ```powershell
-python -m opensearch_scrape --environment QA --keyword groove or cs20260716071044 --max-records 50
+python -m cli --env QA --keyword groove or cs20260716071044 --max-records 50
 ```
 
 環境對應：
 
-- UI `QA` -> CLI `--environment QA`
-- UI `STG` -> CLI `--environment staging`
+- UI `QA` -> CLI `--env QA`
+- UI `STG` -> CLI `--env staging`
 
 ## Keyword 規則
 
@@ -80,7 +80,7 @@ groove and cs20260716071044
 - 如果同一個 input 同時出現 ` or ` 和 ` and `，後端應拒絕，避免查詢語意不清。
 - 第一版只支援一層語法：`A or B`、`A and B`，不做括號或複雜 KQL 編輯器。
 
-OpenSearch_Scrape 目前已在 `src/opensearch_scrape/query.py` 提供 `parse_keyword_expression()`，會解析同一個 `--keyword` 後的 `or` / `and` 表達式。因此 Game Launch Loop API 可以把整個 input 原樣作為單一 `--keyword` 值傳入。
+OpenSearch_Scrape 目前已在 `src/query.py` 提供 `parse_keyword_expression()`，會解析同一個 `--keyword` 後的 `or` / `and` 表達式。因此 Game Launch Loop API 可以把整個 input 原樣作為單一 `--keyword` 值傳入。
 
 ## Topbar Popover UI 計畫
 
@@ -374,8 +374,8 @@ Response body：
   "command": [
     "...python...",
     "-m",
-    "opensearch_scrape",
-    "--environment",
+    "cli",
+    "--env",
     "QA",
     "--keyword",
     "groove or cs20260716071044",
@@ -412,13 +412,13 @@ Request body 不需要參數，可傳空物件：
 API 必須執行以下 OpenSearch_Scrape CLI 行為：
 
 ```text
-open-search-scrape --clear_log
+open-search --clear_log
 ```
 
 為了沿用指定 virtual environment，後端實際 command 可使用等價的 module 形式：
 
 ```text
-<python> -m opensearch_scrape --clear_log
+<python> -m cli --clear_log
 ```
 
 成功 response：
@@ -427,7 +427,7 @@ open-search-scrape --clear_log
 {
   "ok": true,
   "returnCode": 0,
-  "command": ["...python...", "-m", "opensearch_scrape", "--clear_log"],
+  "command": ["...python...", "-m", "cli", "--clear_log"],
   "removedCount": 6,
   "stdout": "Output 已清空：...",
   "stderr": ""
@@ -443,7 +443,7 @@ Clear log API 不接受 keyword 或 environment，也不可以轉送搜尋。
 新增常數：
 
 ```python
-OPENSEARCH_PROJECT_DIR = ROOT.parent / "OpenSearch_Scrape"
+OPENSEARCH_PROJECT_DIR = ROOT.parent / "cli"
 OPENSEARCH_DEFAULT_MAX_RECORDS = 50
 ```
 
@@ -452,8 +452,8 @@ OPENSEARCH_DEFAULT_MAX_RECORDS = 50
 ```python
 def opensearch_python_path():
     candidates = [
-        OPENSEARCH_PROJECT_DIR / ".venv" / "Scripts" / "python.exe",
         OPENSEARCH_PROJECT_DIR / ".venv" / "bin" / "python",
+        OPENSEARCH_PROJECT_DIR / ".venv" / "Scripts" / "python.exe",
     ]
     for candidate in candidates:
         if candidate.exists():
@@ -492,8 +492,8 @@ def build_opensearch_command(payload):
     return [
         str(opensearch_python_path()),
         "-m",
-        "opensearch_scrape",
-        "--environment",
+        "cli",
+        "--env",
         cli_environment,
         "--keyword",
         keyword,
@@ -511,7 +511,7 @@ def build_opensearch_clear_log_command():
     return [
         str(opensearch_python_path()),
         "-m",
-        "opensearch_scrape",
+        "cli",
         "--clear_log",
     ]
 ```
@@ -672,8 +672,8 @@ python -m py_compile src\web_input_server.py
 2. 執行後端 dry run 測試，不登入 OpenSearch、不抓資料，只確認 command 組裝與 keyword operator：
 
 ```powershell
-python -m opensearch_scrape --environment QA --keyword groove or cs20260716071044 --dry-run
-python -m opensearch_scrape --environment QA --keyword groove and cs20260716071044 --dry-run
+python -m cli --env QA --keyword groove or cs20260716071044 --dry-run
+python -m cli --env QA --keyword groove and cs20260716071044 --dry-run
 ```
 
 3. 若從 Game Launch Loop API 測試，應先用 payload 加上 dry-run 支援，或暫時讓後端 command builder 支援 internal dry-run 測試；不得直接用真搜尋當第一個驗證。
@@ -691,7 +691,7 @@ python -m opensearch_scrape --environment QA --keyword groove and cs202607160710
    - Popover 開啟後可以正常輸入、貼上、切換 QA/STG、連續搜尋。
    - 在 keyword input 按 Enter 會觸發搜尋。
    - `Clear log` 位於 `Search Logs` 左邊，呈現紅底白字。
-   - 點擊 `Clear log` 會呼叫 `/api/opensearch-clear-log`，並執行 `open-search-scrape --clear_log` 的等價 module command。
+   - 點擊 `Clear log` 會呼叫 `/api/opensearch-clear-log`，並執行 `open-search --clear_log` 的等價 module command。
    - `Clear log` 執行期間 disabled，但按鈕文字不顯示 loading 文案。
    - Clear log API 完成後，按鈕顯示 `Clear n files`，`n` 與 response 的 `removedCount` 相同。
    - Enter 只觸發搜尋，不會觸發 Clear log。
@@ -715,6 +715,6 @@ python -m opensearch_scrape --environment QA --keyword groove and cs202607160710
 ## 注意事項
 
 - subprocess 必須使用 `cwd=OPENSEARCH_PROJECT_DIR`，讓 OpenSearch_Scrape 正確讀取自己的 `.env`。
-- 優先使用 OpenSearch_Scrape 的 `.venv\Scripts\python.exe`，因為 Playwright 等依賴通常安裝在該 venv。
+- 優先使用 OpenSearch_Scrape 的 `.venv/bin/python`，Windows 則使用 `.venv\Scripts\python.exe`，因為 Playwright 等依賴通常安裝在該 venv。
 - input 只做簡單語法，完整 KQL 組裝交給 OpenSearch_Scrape。
 - 這個 API 會執行本機命令，只建議維持 localhost 使用。

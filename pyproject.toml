@@ -27,7 +27,7 @@ dev = [
 ]
 
 [project.scripts]
-open-search-scrape = "cli:main"
+open-search = "cli:main"
 
 [tool.hatch.build.targets.wheel]
 only-include = ["src"]

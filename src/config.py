@@ -74,7 +74,7 @@ class Settings(BaseModel):
             # Try the requested path first, then the repository root next to
             # ``src`` so credentials are loaded consistently in both cases.
             candidates = [Path(env_file)]
-            project_env = Path(__file__).resolve().parents[2] / ".env"
+            project_env = Path(__file__).resolve().parents[1] / ".env"
             if project_env not in candidates:
                 candidates.append(project_env)
             for candidate in candidates:

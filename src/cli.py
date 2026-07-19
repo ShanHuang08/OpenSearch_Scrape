@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import shutil
@@ -23,10 +23,18 @@ GOOGLE_SHEETS_URL_TEMPLATE = "https://docs.google.com/spreadsheets/d/{spreadshee
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="open-search-scrape",
+        prog="open-search",
         description="從 OpenSearch Dashboard 擷取 log 並輸出 Markdown。",
+        epilog=(
+            "範例：\n"
+            "  open-search -k cs20260714032331\n"
+            "  open-search -k cs20260714032331 -e QA\n"
+            "  open-search -k cs20260714032331 -e QA --google-sheets"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--environment", "-e", help="QA 或 staging（stg 亦可）")
+    parser.add_argument("--env", "-e", dest="environment", help="QA 或 staging（stg 亦可）")
+    parser.add_argument("--environment", dest="environment", help=argparse.SUPPRESS)
     parser.add_argument(
         "--keyword", "-k", action="append", nargs="+", dest="keywords",
         help="搜尋關鍵字；可寫成 'groove or cs123' 或重複使用 --keyword",
