@@ -1,0 +1,76 @@
+# OpenSearch Log Report
+
+## Log 目錄 {% if discover_url %}<a href="{{ discover_url | html_attr }}" target="_blank" rel="noopener noreferrer">開啟 OpenSearch</a>{% endif %}
+
+| 編號 | URL | Error |
+| ---: | --- | --- |
+{% for record in result.records %}| {{ loop.index }} | <a href="#log-{{ loop.index }}">{{ record.url.rendered | html_text }}</a> | {{ (record.error | display_error) | table_text }} |
+{% endfor %}
+
+## 執行摘要
+
+| 項目 | 值 |
+| --- | --- |
+| 執行時間 | {{ executed_at.isoformat() | inline_code }} |
+| 狀態 | {{ result.status | inline_code }} |
+| 環境 | {{ environment.name | inline_code }} |
+| Index Pattern | {{ environment.pattern_name | inline_code }} |
+| Index Pattern ID | {{ environment.index_pattern_id | inline_code }} |
+| 關鍵字 | {{ keywords | join(', ') | inline_code }} |
+| KQL | {{ kql | inline_code }} |
+| 時間範圍 | {{ (result.human_time_range or (time_from ~ ' → ' ~ time_to)) | inline_code }} |
+| 預期筆數 | {{ result.expected_total | inline_code }} |
+| 實際擷取筆數 | {{ result.records | length | inline_code }} |
+| 重複筆數 | {{ result.duplicate_count | inline_code }} |
+| 解析／執行警告數 | {{ warning_count | inline_code }} |
+{% if result.incomplete_reason %}| 未完成原因 | {{ result.incomplete_reason | inline_code }} |
+{% endif %}
+{% if result.warnings %}
+## 執行警告
+
+{% for warning in result.warnings %}- {{ warning }}
+{% endfor %}
+{% endif %}
+{% if not result.records %}
+## 查詢結果
+
+沒有符合條件的 log。
+{% endif %}
+{% for record in result.records %}
+<a id="log-{{ loop.index }}"></a>
+## Log {{ loop.index }}: {{ record.url.rendered | inline_code }}
+
+- Record Key: {{ record.record_key | inline_code }}
+- Request Time: {{ record.request_time | inline_code }}
+- Username: {{ record.username | inline_code }}
+- Game Code: {{ record.game_code | inline_code }}
+- Time Taken: {{ record.time_taken.rendered | inline_code }}
+- URL: {{ record.url.rendered | inline_code }}
+- Operator URL: {{ record.operator_url.rendered | inline_code }}
+- Error: {{ record.error | display_error | inline_code }}
+
+### Request Body
+
+{{ record.request_body | code_block }}
+
+### Response Body
+
+{{ record.response_body | code_block }}
+
+### Operator Data
+
+{{ record.operator_data | code_block }}
+
+### Operator Response
+
+{{ record.operator_response | code_block }}
+
+{% if record.parse_warnings %}
+
+### 解析警告
+
+{% for warning in record.parse_warnings %}- {{ warning }}
+{% endfor %}
+{% endif %}
+
+{% endfor %}
