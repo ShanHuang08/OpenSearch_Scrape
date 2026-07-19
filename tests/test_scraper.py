@@ -1,4 +1,4 @@
-from opensearch_scrape.scraper import LOGIN_SELECTORS, OpenSearchScraper
+﻿from scraper import LOGIN_SELECTORS, OpenSearchScraper
 
 
 def test_header_map_uses_names_instead_of_fixed_columns() -> None:
@@ -25,7 +25,11 @@ def test_login_selectors_prefer_stable_attributes() -> None:
     assert LOGIN_SELECTORS["username"][0] == '[data-test-subj="user-name"]'
     assert LOGIN_SELECTORS["password"][0] == '[data-test-subj="password"]'
     assert LOGIN_SELECTORS["submit"][0] == '[data-test-subj="submit"]'
-    assert all("i739" not in selector for selectors in LOGIN_SELECTORS.values() for selector in selectors)
+    assert all(
+        "i739" not in selector
+        for selectors in LOGIN_SELECTORS.values()
+        for selector in selectors
+    )
 
 
 def test_time_range_label_removes_show_dates_suffix() -> None:

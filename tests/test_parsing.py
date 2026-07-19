@@ -1,8 +1,8 @@
-from datetime import datetime, timezone
+﻿from datetime import UTC, datetime
 
-from opensearch_scrape.environments import resolve_environment
-from opensearch_scrape.models import RawLogRow
-from opensearch_scrape.parsing import (
+from environments import resolve_environment
+from models import RawLogRow
+from parsing import (
     build_record_key,
     extract_operator_identity,
     normalize_row,
@@ -55,7 +55,7 @@ def test_record_key_contains_environment() -> None:
 def test_normalize_row_extracts_identity() -> None:
     record = normalize_row(
         RawLogRow(operatorData='{"username":"user-1","gameCode":"game-2"}'),
-        scraped_at=datetime(2026, 7, 19, tzinfo=timezone.utc),
+        scraped_at=datetime(2026, 7, 19, tzinfo=UTC),
         environment=resolve_environment("QA"),
         query='"groove"',
         time_from="now-1w",

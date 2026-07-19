@@ -1,21 +1,21 @@
-import pytest
+﻿import pytest
 
-from opensearch_scrape.cli import (
+from cli import (
     build_parser,
     clear_output_directory,
     google_spreadsheet_url,
     main,
     open_google_spreadsheet,
 )
-from opensearch_scrape.config import Settings
-from opensearch_scrape.environments import resolve_environment
-from opensearch_scrape.query import (
+from config import Settings
+from environments import resolve_environment
+from query import (
     build_discover_url,
     build_kql,
     parse_keyword_expression,
     query_slug,
 )
-from opensearch_scrape.scraper import RawScrapeResult
+from scraper import RawScrapeResult
 
 
 def test_single_keyword_kql_and_url() -> None:
@@ -111,7 +111,7 @@ def test_google_spreadsheet_url_requires_id() -> None:
 def test_open_google_spreadsheet_uses_default_browser(monkeypatch, capsys) -> None:
     opened_urls: list[str] = []
     monkeypatch.setattr(
-        "opensearch_scrape.cli.webbrowser.open",
+        "cli.webbrowser.open",
         lambda url: opened_urls.append(url) or True,
     )
 
@@ -126,9 +126,9 @@ def test_google_sheets_dry_run_opens_sheet_without_writing(monkeypatch) -> None:
         google_spreadsheet_id="sheet-id",
     )
     opened_ids: list[str] = []
-    monkeypatch.setattr("opensearch_scrape.cli.Settings.from_env", lambda: settings)
+    monkeypatch.setattr("cli.Settings.from_env", lambda: settings)
     monkeypatch.setattr(
-        "opensearch_scrape.cli.open_google_spreadsheet",
+        "cli.open_google_spreadsheet",
         lambda spreadsheet_id: opened_ids.append(spreadsheet_id) or True,
     )
 
@@ -151,10 +151,10 @@ def test_zero_opensearch_results_fail_before_outputs(monkeypatch, capsys) -> Non
     def unexpected_output(*args, **kwargs):
         raise AssertionError("0 筆結果不得產生 Markdown 或寫入 Google Sheets")
 
-    monkeypatch.setattr("opensearch_scrape.cli.OpenSearchScraper", EmptyScraper)
-    monkeypatch.setattr("opensearch_scrape.cli.write_markdown", unexpected_output)
-    monkeypatch.setattr("opensearch_scrape.cli.GoogleSheetsWriter", unexpected_output)
-    monkeypatch.setattr("opensearch_scrape.cli.webbrowser.open", unexpected_output)
+    monkeypatch.setattr("cli.OpenSearchScraper", EmptyScraper)
+    monkeypatch.setattr("cli.write_markdown", unexpected_output)
+    monkeypatch.setattr("cli.GoogleSheetsWriter", unexpected_output)
+    monkeypatch.setattr("cli.webbrowser.open", unexpected_output)
 
     exit_code = main(["--environment", "QA", "--keyword", "missing-log"])
 

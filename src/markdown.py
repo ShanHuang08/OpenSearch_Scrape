@@ -1,15 +1,15 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
-import re
 import html
+import re
 from datetime import datetime
 from pathlib import Path
 
-from jinja2 import Environment, PackageLoader, StrictUndefined, select_autoescape
+from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
 
-from .environments import EnvironmentSpec
-from .models import ParsedField, ScrapeResult
-from .query import query_slug
+from environments import EnvironmentSpec
+from models import ParsedField, ScrapeResult
+from query import query_slug
 
 
 def code_block(field: ParsedField, language: str | None = None) -> str:
@@ -52,7 +52,7 @@ def html_attr(value: object | None) -> str:
 
 def _template_environment() -> Environment:
     environment = Environment(
-        loader=PackageLoader("opensearch_scrape", "templates"),
+        loader=FileSystemLoader(Path(__file__).parent / "templates"),
         autoescape=select_autoescape(default=False),
         undefined=StrictUndefined,
         trim_blocks=True,

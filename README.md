@@ -242,7 +242,7 @@ open-search-scrape --clear-log
 CLI 也接受底線形式 `--clear_log`。若尚未安裝 console script，Windows 或 macOS 都可使用模組方式：
 
 ```text
-python -m opensearch_scrape --clear-log
+python -m cli --clear-log
 ```
 
 指定其他輸出資料夾：
@@ -262,7 +262,7 @@ open-search-scrape --clear-log --environment QA --keyword groove
 若 CLI 指令尚未加入 PATH，Windows CMD／PowerShell 與 macOS 都可以使用模組方式：
 
 ```text
-python -m opensearch_scrape --environment QA --keyword groove --max-records 50
+python -m cli --environment QA --keyword groove --max-records 50
 ```
 
 未提供 `--environment` 或 `--keyword` 時，CLI 會進入互動輸入模式。

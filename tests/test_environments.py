@@ -1,6 +1,6 @@
-import pytest
+﻿import pytest
 
-from opensearch_scrape.environments import resolve_environment
+from environments import resolve_environment
 
 
 @pytest.mark.parametrize("value", ["QA", "qa", " Qa "])

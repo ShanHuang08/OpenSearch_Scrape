@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import hashlib
 import json
@@ -7,9 +7,8 @@ from datetime import datetime
 from typing import Any
 from urllib.parse import unquote
 
-from .environments import EnvironmentSpec
-from .models import LogRecord, ParsedField, RawLogRow
-
+from environments import EnvironmentSpec
+from models import LogRecord, ParsedField, RawLogRow
 
 PERCENT_ENCODED = re.compile(r"%[0-9a-fA-F]{2}")
 IDENTITY_NAMES = {

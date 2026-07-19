@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import re
 import time
@@ -6,11 +6,10 @@ from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import quote
 
-from .config import Settings
-from .environments import EnvironmentSpec
-from .models import RawLogRow
-from .query import build_discover_url
-
+from config import Settings
+from environments import EnvironmentSpec
+from models import RawLogRow
+from query import build_discover_url
 
 REQUIRED_HEADERS = {
     "requestBody",
@@ -136,7 +135,8 @@ class OpenSearchScraper:
         body_text = page.locator("body").inner_text(timeout=10_000).lower()
         if any(marker in body_text for marker in challenge_markers):
             raise SecurityChallengeError("登入遇到 CAPTCHA、MFA 或 OTP，需要人工完成驗證。")
-        if page.locator('iframe[src*="captcha" i], [class*="captcha" i], [id*="captcha" i]').count():
+        captcha_selector = 'iframe[src*="captcha" i], [class*="captcha" i], [id*="captcha" i]'
+        if page.locator(captcha_selector).count():
             raise SecurityChallengeError("登入遇到 CAPTCHA，需要人工完成驗證。")
 
     def _login_if_needed(self, page: Any) -> None:
@@ -259,7 +259,9 @@ class OpenSearchScraper:
             """
             cells => cells.map(cell => {
               const copy = cell.cloneNode(true);
-              copy.querySelectorAll('button, svg, [aria-hidden="true"]').forEach(node => node.remove());
+              copy
+                .querySelectorAll('button, svg, [aria-hidden="true"]')
+                .forEach(node => node.remove());
               return (copy.innerText || copy.textContent || '').trim();
             })
             """
@@ -277,7 +279,8 @@ class OpenSearchScraper:
                   ['auto', 'scroll'].includes(style.overflowY);
                 if (canScroll) {
                   const before = container.scrollTop;
-                  const atBottomBefore = before + container.clientHeight >= container.scrollHeight - 2;
+                  const atBottomBefore =
+                    before + container.clientHeight >= container.scrollHeight - 2;
                   container.scrollTop = Math.min(
                     container.scrollHeight,
                     before + Math.max(container.clientHeight * 0.8, 400)

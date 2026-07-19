@@ -1,13 +1,13 @@
-import json
+﻿import json
 import sys
 from datetime import UTC, datetime
 from types import ModuleType
 
-from opensearch_scrape.config import Settings
-from opensearch_scrape.environments import resolve_environment
-from opensearch_scrape.models import RawLogRow
-from opensearch_scrape.parsing import normalize_row
-from opensearch_scrape.sheets import (
+from config import Settings
+from environments import resolve_environment
+from models import RawLogRow
+from parsing import normalize_row
+from sheets import (
     GOOGLE_SHEETS_CELL_CHAR_LIMIT,
     LEGACY_SHEET_HEADERS,
     SHEET_HEADERS,

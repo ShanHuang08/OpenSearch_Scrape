@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import re
@@ -10,8 +10,8 @@ from typing import TypeVar
 
 from tenacity import Retrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from .config import Settings
-from .models import LogRecord
+from config import Settings
+from models import LogRecord
 
 SHEET_HEADERS = [
     "recordKey",

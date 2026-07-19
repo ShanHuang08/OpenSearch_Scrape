@@ -1,9 +1,9 @@
-from datetime import datetime, timezone
+﻿from datetime import UTC, datetime
 
-from opensearch_scrape.environments import resolve_environment
-from opensearch_scrape.markdown import code_block, render_markdown
-from opensearch_scrape.models import ParsedField, RawLogRow, ScrapeResult
-from opensearch_scrape.parsing import normalize_row
+from environments import resolve_environment
+from markdown import code_block, render_markdown
+from models import ParsedField, RawLogRow, ScrapeResult
+from parsing import normalize_row
 
 
 def test_code_block_uses_longer_fence_when_content_contains_backticks() -> None:
@@ -14,7 +14,7 @@ def test_code_block_uses_longer_fence_when_content_contains_backticks() -> None:
 
 
 def test_empty_report_renders_summary() -> None:
-    executed_at = datetime(2026, 7, 19, tzinfo=timezone.utc)
+    executed_at = datetime(2026, 7, 19, tzinfo=UTC)
     content = render_markdown(
         ScrapeResult(records=[], expected_total=0),
         environment=resolve_environment("QA"),
@@ -30,7 +30,7 @@ def test_empty_report_renders_summary() -> None:
 
 
 def test_url_operator_url_and_error_are_single_line_summary_fields() -> None:
-    executed_at = datetime(2026, 7, 19, tzinfo=timezone.utc)
+    executed_at = datetime(2026, 7, 19, tzinfo=UTC)
     record = normalize_row(
         RawLogRow(
             url="/api/v1/casinoGate",
@@ -61,7 +61,7 @@ def test_url_operator_url_and_error_are_single_line_summary_fields() -> None:
 
 
 def test_log_directory_links_to_named_log_and_blanks_no_error() -> None:
-    executed_at = datetime(2026, 7, 19, tzinfo=timezone.utc)
+    executed_at = datetime(2026, 7, 19, tzinfo=UTC)
     record = normalize_row(
         RawLogRow(url="/api/v1/casinogate", error="-"),
         scraped_at=executed_at,
@@ -92,7 +92,7 @@ def test_log_directory_has_new_tab_opensearch_link() -> None:
         kql='"casinoGate"',
         time_from="now-1w",
         time_to="now",
-        executed_at=datetime(2026, 7, 19, tzinfo=timezone.utc),
+        executed_at=datetime(2026, 7, 19, tzinfo=UTC),
         discover_url="https://example.test/discover#?_q=query%3A%27casinoGate%27",
     )
     assert '<a href="https://example.test/discover#?_q=query%3A%27casinoGate%27"' in content

@@ -99,7 +99,7 @@ OAuth 使用以下檔案：
 
 - `client_secret_*.json`：OAuth client 設定，初次授權及 refresh token 更新時使用。
 - `google-token.json`：保存 access token 與 refresh token。
-- `src/opensearch_scrape/sheets.py`：正式 OAuth、token refresh 與 Sheet 寫入實作。
+- `src/sheets.py`：正式 OAuth、token refresh 與 Sheet 寫入實作。
 
 可在 [Google Cloud OAuth consent screen](https://console.cloud.google.com/auth/overview) 查看及調整應用程式的 Publishing status 與 User type。
 

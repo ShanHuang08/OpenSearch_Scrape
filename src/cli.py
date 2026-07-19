@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import shutil
@@ -8,14 +8,14 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from .config import Settings
-from .environments import resolve_environment
-from .markdown import render_markdown, write_markdown
-from .models import ScrapeResult
-from .parsing import normalize_row
-from .query import build_discover_url, build_kql, parse_keyword_expression
-from .scraper import OpenSearchScraper, ScrapeError
-from .sheets import GoogleSheetsWriter
+from config import Settings
+from environments import resolve_environment
+from markdown import render_markdown, write_markdown
+from models import ScrapeResult
+from parsing import normalize_row
+from query import build_discover_url, build_kql, parse_keyword_expression
+from scraper import OpenSearchScraper, ScrapeError
+from sheets import GoogleSheetsWriter
 
 TAIPEI = ZoneInfo("Asia/Taipei")
 GOOGLE_SHEETS_URL_TEMPLATE = "https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit"

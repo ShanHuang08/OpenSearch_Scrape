@@ -1,9 +1,9 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import re
 from urllib.parse import quote
 
-from .environments import EnvironmentSpec
+from environments import EnvironmentSpec
 
 CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
 

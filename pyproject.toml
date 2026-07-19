@@ -27,10 +27,11 @@ dev = [
 ]
 
 [project.scripts]
-open-search-scrape = "opensearch_scrape.cli:main"
+open-search-scrape = "cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/opensearch_scrape"]
+only-include = ["src"]
+sources = ["src"]
 
 [tool.pytest.ini_options]
 addopts = "-q"
