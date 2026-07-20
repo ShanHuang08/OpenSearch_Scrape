@@ -325,6 +325,21 @@ def run(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
+    if argv is None:
+        argv = sys.argv[1:]
+    if not argv:
+        parser.print_help()
+        settings = Settings.from_env()
+        try:
+            opened = open_in_default_browser(settings.dashboard_url)
+        except Exception as exc:
+            print(f"無法開啟 OpenSearch Dashboard：{type(exc).__name__}", file=sys.stderr)
+            return 1
+        if not opened:
+            print("無法使用系統預設瀏覽器開啟 OpenSearch Dashboard。", file=sys.stderr)
+            return 1
+        print(f"已開啟 OpenSearch Dashboard：{settings.dashboard_url}")
+        return 0
     args = parser.parse_args(argv)
     try:
         return run(args)

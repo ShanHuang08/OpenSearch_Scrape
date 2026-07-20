@@ -12,7 +12,7 @@ except ImportError:  # pragma: no cover - only used before dependencies are inst
 
 
 DEFAULT_DASHBOARD_URL = (
-    "https://opensearch-dashboard-dev.newnextgen.site/app/data-explorer/discover"
+    "https://opensearch-dashboard-dev.newnextgen.site/app/data-explorer/discover#?_a=(discover:(columns:!(requestBody,responseBody,url,operatorData,operatorResponse,operatorUrl,error,timeTaken),isDirty:!f,sort:!()),metadata:(indexPattern:'53ceb180-8f5d-11ef-b9c6-73a60e0d81fe',view:discover))&_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:now-1w,to:now))&_q=(filters:!(),query:(language:kuery,query:''))"
 )
 
 
