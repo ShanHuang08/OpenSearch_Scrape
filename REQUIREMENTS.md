@@ -48,7 +48,7 @@ https://opensearch-dashboard-dev.newnextgen.site/app/data-explorer/discover
 | CLI 輸入 | 標準名稱 | Pattern | Index Pattern ID |
 | --- | --- | --- | --- |
 | `QA`、`qa` | `QA` | `api-request-logs-qa-*` | `53ceb180-8f5d-11ef-b9c6-73a60e0d81fe` |
-| `staging`、`STAGING`、`stg` | `staging` | `api-request-logs-stg-*` | `48481400-8c6a-11ef-b9c6-73a60e0d81fe` |
+| `staging`、`STAGING`、`stg` | `staging` | `api-request-logs-stg*` | `48481400-8c6a-11ef-b9c6-73a60e0d81fe` |
 
 未知環境必須拒絕執行。頁面實際 index pattern 與目標環境不一致時必須停止擷取。
 

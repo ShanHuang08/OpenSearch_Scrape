@@ -18,7 +18,7 @@ ENVIRONMENTS: dict[str, EnvironmentSpec] = {
     ),
     "staging": EnvironmentSpec(
         name="staging",
-        pattern_name="api-request-logs-stg-*",
+        pattern_name="api-request-logs-stg*",
         index_pattern_id="48481400-8c6a-11ef-b9c6-73a60e0d81fe",
     ),
 }
@@ -32,4 +32,3 @@ def resolve_environment(value: str) -> EnvironmentSpec:
     if key is None:
         raise ValueError("不支援的環境；目前只接受 QA、staging（或 stg）。")
     return ENVIRONMENTS[key]
-

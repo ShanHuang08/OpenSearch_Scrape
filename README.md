@@ -63,6 +63,15 @@ python -m playwright install chromium && \
 [ -f .env ] || cp .env.example .env
 ```
 
+若要在每次開啟 macOS Terminal 時直接使用 `open-search`，將虛擬環境加入
+`PATH`：
+
+```bash
+export PATH="/Users/${user}/open-search/.venv/bin:$PATH"
+```
+
+建議將這行加入 `~/.zshrc`，再執行 `source ~/.zshrc` 立即套用。
+
 `-print -quit` 會使用找到的第一個同名目錄；如果電腦上有多個專案副本，
 建議改用明確的 `cd` 路徑。
 
@@ -222,6 +231,49 @@ GOOGLE_SHEETS_ENABLED=false
 ```
 
 CLI 參數優先於 `.env`：`--google-sheets` 強制開啟，`--no-google-sheets` 強制關閉。OAuth、目標工作表與 token 設定請參考 [GOOGLE_SHEETS_SETUP_GUIDE.md](GOOGLE_SHEETS_SETUP_GUIDE.md)。
+
+#### Google 憑證設定
+
+`GOOGLE_AUTH_MODE` 必須和 `GOOGLE_CREDENTIALS_FILE` 的 JSON 類型一致，不同類型不可混用。
+
+Service Account 模式需要 Google Cloud Service Account key JSON，內容通常包含
+`"type": "service_account"`、`client_email` 與 `private_key`：
+
+```dotenv
+GOOGLE_SHEETS_ENABLED=true
+GOOGLE_AUTH_MODE=service-account
+GOOGLE_CREDENTIALS_FILE=/Users/${user}/open-search/google-service-account.json
+GOOGLE_SPREADSHEET_ID=你的Spreadsheet_ID
+GOOGLE_WORKSHEET_NAME=
+```
+
+OAuth 模式才使用以下這類檔案：
+
+```text
+client_secret_733400045474-...apps.googleusercontent.com.json
+```
+
+設定範例：
+
+```dotenv
+GOOGLE_SHEETS_ENABLED=true
+GOOGLE_AUTH_MODE=oauth
+GOOGLE_CREDENTIALS_FILE=/Users/${user}/open-search/client_secret_733400045474-...apps.googleusercontent.com.json
+GOOGLE_TOKEN_FILE=/Users/${user}/open-search/google-token.json
+GOOGLE_SPREADSHEET_ID=你的Spreadsheet_ID
+GOOGLE_WORKSHEET_NAME=
+```
+
+常見錯誤：
+
+- `GOOGLE_AUTH_MODE=service-account` 搭配 `client_secret_*.json`：請改用 Service Account JSON，或將模式改成 `oauth`。
+- `GOOGLE_CREDENTIALS_FILE` 空白或檔案不存在：請填入有效的絕對路徑。
+- Service Account 模式：將 Sheet 分享給 JSON 內的 `client_email`。
+- OAuth 模式：第一次執行會開啟瀏覽器完成授權，之後使用 `GOOGLE_TOKEN_FILE`。
+- `GOOGLE_WORKSHEET_NAME` 留空時，會從 log URL `/api/v1/{provider}/...` 推導分頁名稱，例如 `/api/v1/casinogate/v1/providers/...` 會使用 `casinogate`；不存在的分頁會自動建立。
+- 若同一批 log 包含多個 provider，請明確設定 `GOOGLE_WORKSHEET_NAME`，避免寫入錯誤分頁。
+
+CLI 發生 Google Sheets 錯誤時，Markdown 仍會保留，錯誤訊息會同時顯示錯誤類型與詳細原因，方便判斷是憑證、Sheet 權限、工作表名稱或表頭格式問題。
 
 ### 清空 output 資料夾
 

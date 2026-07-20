@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import plistlib
 import shutil
+import subprocess
 import sys
 import webbrowser
 from datetime import datetime
@@ -19,6 +21,44 @@ from sheets import GoogleSheetsWriter
 
 TAIPEI = ZoneInfo("Asia/Taipei")
 GOOGLE_SHEETS_URL_TEMPLATE = "https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit"
+
+
+def _macos_default_browser_bundle_id() -> str | None:
+    try:
+        result = subprocess.run(
+            [
+                "defaults",
+                "export",
+                "com.apple.LaunchServices/com.apple.launchservices.secure",
+                "-",
+            ],
+            capture_output=True,
+            check=True,
+        )
+        preferences = plistlib.loads(result.stdout)
+    except (OSError, subprocess.SubprocessError, plistlib.InvalidFileException):
+        return None
+
+    handlers = preferences.get("LSHandlers", [])
+    for scheme in ("https", "http"):
+        for handler in handlers:
+            if handler.get("LSHandlerURLScheme") == scheme:
+                bundle_id = handler.get("LSHandlerRoleAll")
+                if bundle_id:
+                    return bundle_id
+    return None
+
+
+def open_in_default_browser(url: str) -> bool:
+    """Open a URL with the system default browser."""
+    if sys.platform == "darwin":
+        # A local Markdown file follows the `.md` file association when opened
+        # with `open`; explicitly target the browser that handles HTTPS URLs.
+        bundle_id = _macos_default_browser_bundle_id()
+        if bundle_id:
+            result = subprocess.run(["open", "-b", bundle_id, url], check=False)
+            return result.returncode == 0
+    return webbrowser.open(url)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -253,7 +293,7 @@ def run(args: argparse.Namespace) -> int:
     print(f"Markdown：{output_path.resolve()}")
     if args.open_output:
         try:
-            opened = webbrowser.open(output_path.resolve().as_uri())
+            opened = open_in_default_browser(output_path.resolve().as_uri())
             if not opened:
                 print("警告：無法自動開啟系統預設瀏覽器。", file=sys.stderr)
         except Exception as exc:
@@ -264,7 +304,7 @@ def run(args: argparse.Namespace) -> int:
     except Exception as exc:
         print(
             "Google Sheets：failed "
-            f"(Markdown 已保留；錯誤類型={type(exc).__name__})",
+            f"(Markdown 已保留；錯誤類型={type(exc).__name__}；詳細原因={exc})",
             file=sys.stderr,
         )
         return 2
@@ -272,7 +312,8 @@ def run(args: argparse.Namespace) -> int:
         "Google Sheets："
         f"{sheets_result.status} "
         f"(新增={sheets_result.added}, 更新={sheets_result.updated}, "
-        f"跳過={sheets_result.skipped}, 失敗={sheets_result.failed})"
+        f"跳過={sheets_result.skipped}, 失敗={sheets_result.failed}"
+        f"{f', {sheets_result.message}' if sheets_result.message else ''})"
     )
     if sheets_result.status == "success":
         open_google_spreadsheet(settings.google_spreadsheet_id)

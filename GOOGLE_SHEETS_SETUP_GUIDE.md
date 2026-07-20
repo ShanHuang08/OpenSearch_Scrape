@@ -19,7 +19,7 @@
 ```dotenv
 GOOGLE_SHEETS_ENABLED=true
 GOOGLE_SPREADSHEET_ID=試算表_ID
-GOOGLE_WORKSHEET_NAME=OpenSearch Logs
+GOOGLE_WORKSHEET_NAME=
 GOOGLE_AUTH_MODE=service-account
 GOOGLE_CREDENTIALS_FILE=/path/to/google-service-account.json
 GOOGLE_WRITE_MODE=upsert
@@ -122,6 +122,21 @@ google-service-account*.json
 
 - `Spreadsheet not found`：Spreadsheet ID 錯誤，或目前授權帳號／Service Account 沒有權限。
 - `Worksheet not found`：`GOOGLE_WORKSHEET_NAME` 與工作表名稱不一致。
+- `GOOGLE_WORKSHEET_NAME` 留空時，系統會從 `/api/v1/{provider}/...` URL 推導分頁名稱，例如 `/api/v1/casinogate/v1/providers/...` 會使用 `casinogate`，且不存在的分頁會自動建立。
+
+自動建立的新分頁使用 9 欄格式，header 寫在第一列，log 從第二列開始：
+
+| 欄 | Header | 寬度（像素） |
+| --- | --- | ---: |
+| A | `username` | 100 |
+| B | `game code` | 100 |
+| C | `requestBody` | 201 |
+| D | `responseBody` | 217 |
+| E | `url` | 100 |
+| F | `operatorData` | 403 |
+| G | `operatorResponse` | 178 |
+| H | `operatorUrl` | 100 |
+| I | `remark` | 100 |
 - 表頭不相容：將第一列改成支援的 21 欄或 9 欄格式，或改用專用工作表。
 - OAuth token 失效：刪除本機 `google-token.json` 後重新執行，完成一次瀏覽器授權。
 - 重複資料：確認 `GOOGLE_WRITE_MODE=upsert`；21 欄格式以第一欄、9 欄格式以 `remark` 中的 `recordKey` 判斷。

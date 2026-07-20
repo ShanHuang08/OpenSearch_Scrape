@@ -15,11 +15,10 @@ def test_resolve_qa(value: str) -> None:
 def test_resolve_staging(value: str) -> None:
     environment = resolve_environment(value)
     assert environment.name == "staging"
-    assert environment.pattern_name == "api-request-logs-stg-*"
+    assert environment.pattern_name == "api-request-logs-stg*"
     assert environment.index_pattern_id == "48481400-8c6a-11ef-b9c6-73a60e0d81fe"
 
 
 def test_unknown_environment_is_rejected() -> None:
     with pytest.raises(ValueError, match="只接受 QA"):
         resolve_environment("production")
-

@@ -43,7 +43,7 @@ class Settings(BaseModel):
 
     google_sheets_enabled: bool = False
     google_spreadsheet_id: str = ""
-    google_worksheet_name: str = "OpenSearch Logs"
+    google_worksheet_name: str = ""
     google_auth_mode: str = "service-account"
     google_credentials_file: Path | None = None
     google_token_file: Path = Path("google-token.json")
@@ -95,7 +95,7 @@ class Settings(BaseModel):
             google_sheets_enabled=_env_bool("GOOGLE_SHEETS_ENABLED", False),
             google_spreadsheet_id=os.getenv("GOOGLE_SPREADSHEET_ID", "").strip(),
             google_worksheet_name=os.getenv(
-                "GOOGLE_WORKSHEET_NAME", "OpenSearch Logs"
+                "GOOGLE_WORKSHEET_NAME", ""
             ).strip(),
             google_auth_mode=os.getenv("GOOGLE_AUTH_MODE", "service-account"),
             google_credentials_file=Path(credentials_path) if credentials_path else None,

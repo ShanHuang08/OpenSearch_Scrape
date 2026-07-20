@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from itertools import islice
 from pathlib import Path
 from typing import TypeVar
+from urllib.parse import urlparse
 
 from tenacity import Retrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
@@ -51,10 +52,12 @@ LEGACY_SHEET_HEADERS = [
     "operatorUrl",
     "remark",
 ]
+LEGACY_COLUMN_WIDTHS = [100, 100, 201, 217, 100, 403, 178, 100, 100]
 
 GOOGLE_SHEETS_CELL_CHAR_LIMIT = 50_000
 GOOGLE_SHEETS_SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 T = TypeVar("T")
+PROVIDER_URL_PATTERN = re.compile(r"^/api/v1/([^/]+)/", re.IGNORECASE)
 
 
 @dataclass(slots=True)
@@ -66,6 +69,40 @@ class SheetsWriteResult:
     skipped: int = 0
     failed: int = 0
     message: str | None = None
+
+
+def _read_credentials_json(path: Path) -> dict:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(
+            f"Google 憑證檔無法讀取或不是有效 JSON：{path}。"
+            "請確認 GOOGLE_CREDENTIALS_FILE 指向正確的憑證檔。"
+        ) from exc
+
+
+def worksheet_name_from_records(records: list[LogRecord]) -> str:
+    """Derive a stable worksheet name from API provider URLs."""
+    provider_names: set[str] = set()
+    for record in records:
+        raw_url = record.url.original or ""
+        path = urlparse(raw_url).path if "://" in raw_url else raw_url.split("?", 1)[0]
+        match = PROVIDER_URL_PATTERN.match(path.strip())
+        if match:
+            provider_names.add(match.group(1))
+
+    if not provider_names:
+        raise ValueError(
+            "無法從 log URL 推導 Google worksheet 名稱；"
+            "請設定 GOOGLE_WORKSHEET_NAME，或確認 URL 符合 /api/v1/{provider}/...。"
+        )
+    if len(provider_names) > 1:
+        names = ", ".join(sorted(provider_names))
+        raise ValueError(
+            f"同一批 log 包含多個 provider（{names}），無法決定 Google worksheet；"
+            "請設定 GOOGLE_WORKSHEET_NAME。"
+        )
+    return provider_names.pop()
 
 
 def record_to_sheet_row(record: LogRecord) -> list[str]:
@@ -134,6 +171,42 @@ def _column_name(number: int) -> str:
     return value
 
 
+def _legacy_column_width_requests(sheet_id: int) -> list[dict]:
+    return [
+        {
+            "updateDimensionProperties": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "dimension": "COLUMNS",
+                    "startIndex": index,
+                    "endIndex": index + 1,
+                },
+                "properties": {"pixelSize": width},
+                "fields": "pixelSize",
+            }
+        }
+        for index, width in enumerate(LEGACY_COLUMN_WIDTHS)
+    ]
+
+
+def _legacy_wrap_requests(sheet_id: int) -> list[dict]:
+    return [
+        {
+            "repeatCell": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "startRowIndex": 1,
+                    "startColumnIndex": column_index,
+                    "endColumnIndex": column_index + 1,
+                },
+                "cell": {"userEnteredFormat": {"wrapStrategy": "WRAP"}},
+                "fields": "userEnteredFormat.wrapStrategy",
+            }
+        }
+        for column_index in (1, 4)
+    ]
+
+
 class GoogleSheetsWriter:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -169,10 +242,22 @@ class GoogleSheetsWriter:
             credentials.refresh(Request())
 
         if not credentials or not credentials.valid:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                str(self.settings.google_credentials_file),
-                scopes=GOOGLE_SHEETS_SCOPES,
-            )
+            credentials_data = _read_credentials_json(self.settings.google_credentials_file)
+            if not (credentials_data.get("installed") or credentials_data.get("web")):
+                raise ValueError(
+                    "GOOGLE_AUTH_MODE=oauth 需要 OAuth client secret JSON（通常是 "
+                    "client_secret_*.json）；目前檔案格式不符合。"
+                )
+            try:
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    str(self.settings.google_credentials_file),
+                    scopes=GOOGLE_SHEETS_SCOPES,
+                )
+            except Exception as exc:
+                raise ValueError(
+                    "OAuth 憑證載入失敗。請確認 GOOGLE_CREDENTIALS_FILE 是 OAuth client "
+                    "secret JSON，且 GOOGLE_AUTH_MODE=oauth。"
+                ) from exc
             credentials = flow.run_local_server(
                 host="localhost",
                 port=0,
@@ -197,10 +282,23 @@ class GoogleSheetsWriter:
                 from google.oauth2.service_account import Credentials
             except ImportError as exc:  # pragma: no cover - integration dependency
                 raise RuntimeError("缺少 google-auth，請先安裝專案 dependencies。") from exc
-            credentials = Credentials.from_service_account_file(
-                str(self.settings.google_credentials_file),
-                scopes=GOOGLE_SHEETS_SCOPES,
-            )
+            credentials_data = _read_credentials_json(self.settings.google_credentials_file)
+            if credentials_data.get("type") != "service_account":
+                raise ValueError(
+                    "GOOGLE_AUTH_MODE=service-account 需要 Service Account JSON；"
+                    "目前檔案看起來是 OAuth client secret。"
+                    "若使用 client_secret_*.json，請改成 GOOGLE_AUTH_MODE=oauth。"
+                )
+            try:
+                credentials = Credentials.from_service_account_file(
+                    str(self.settings.google_credentials_file),
+                    scopes=GOOGLE_SHEETS_SCOPES,
+                )
+            except Exception as exc:
+                raise ValueError(
+                    "Service Account 憑證載入失敗。請重新下載 Service Account JSON，"
+                    "並確認 GOOGLE_CREDENTIALS_FILE 路徑正確。"
+                ) from exc
         else:
             credentials = self._oauth_credentials()
         return gspread.authorize(credentials)
@@ -221,7 +319,17 @@ class GoogleSheetsWriter:
 
         client = self._authorize(gspread)
         spreadsheet = client.open_by_key(self.settings.google_spreadsheet_id)
-        worksheet = spreadsheet.worksheet(self.settings.google_worksheet_name)
+        worksheet_name = self.settings.google_worksheet_name or worksheet_name_from_records(records)
+        worksheet_created = False
+        try:
+            worksheet = spreadsheet.worksheet(worksheet_name)
+        except gspread.exceptions.WorksheetNotFound:
+            worksheet = spreadsheet.add_worksheet(
+                title=worksheet_name,
+                rows=1000,
+                cols=len(LEGACY_SHEET_HEADERS),
+            )
+            worksheet_created = True
 
         retrying = Retrying(
             retry=retry_if_exception_type((gspread.exceptions.APIError, RequestException)),
@@ -234,10 +342,20 @@ class GoogleSheetsWriter:
             return retrying(function, *args, **kwargs)
 
         current_headers = api_call(worksheet.row_values, 1)
-        if not current_headers:
-            api_call(worksheet.update, [SHEET_HEADERS], "A1")
-            active_headers = SHEET_HEADERS
-            row_builder = record_to_sheet_row
+        if worksheet_created or not current_headers:
+            api_call(worksheet.update, [LEGACY_SHEET_HEADERS], "A1")
+            api_call(worksheet.freeze, rows=1)
+            api_call(
+                spreadsheet.batch_update,
+                {
+                    "requests": [
+                        *_legacy_column_width_requests(worksheet.id),
+                        *_legacy_wrap_requests(worksheet.id),
+                    ]
+                },
+            )
+            active_headers = LEGACY_SHEET_HEADERS
+            row_builder = record_to_legacy_sheet_row
         elif current_headers == SHEET_HEADERS:
             active_headers = SHEET_HEADERS
             row_builder = record_to_sheet_row
@@ -260,7 +378,11 @@ class GoogleSheetsWriter:
                 "Google Sheets 儲存格內容過大，已停止寫入且保留 Markdown："
                 f"資料列 {row_number}、欄位 {column_name}、{length} 字元。"
             )
-        result = SheetsWriteResult(status="success", attempted=len(rows))
+        result = SheetsWriteResult(
+            status="success",
+            attempted=len(rows),
+            message=f"worksheet={worksheet_name}",
+        )
         if not rows:
             return result
 
