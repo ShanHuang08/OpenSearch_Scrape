@@ -41,6 +41,8 @@ LOGIN_SELECTORS = {
         'button[type="submit"]',
     ),
 }
+NO_RESULTS_SELECTOR = '[data-test-subj="discoverNoResults"]'
+RESULT_SURFACE_SELECTOR = f"table, {NO_RESULTS_SELECTOR}"
 
 
 class ScrapeError(RuntimeError):
@@ -187,7 +189,9 @@ class OpenSearchScraper:
         # The direct URL already contains the full KQL, so wait for the result surface
         # before falling back to URL verification when the input is not yet mounted.
         try:
-            page.wait_for_selector("table", timeout=30_000)
+            self._wait_for_result_surface(page)
+        except ScrapeError:
+            raise
         except Exception:
             pass
         search_box = page.locator('input[placeholder="Search"]')
@@ -207,6 +211,17 @@ class OpenSearchScraper:
         submit.click()
 
     @staticmethod
+    def _raise_if_no_results(page: Any) -> None:
+        no_results = page.locator(NO_RESULTS_SELECTOR)
+        if no_results.count() and no_results.first.is_visible():
+            raise ScrapeError("OpenSearch 找不到符合條件的 log。")
+
+    @classmethod
+    def _wait_for_result_surface(cls, page: Any) -> None:
+        page.wait_for_selector(RESULT_SURFACE_SELECTOR, timeout=30_000)
+        cls._raise_if_no_results(page)
+
+    @staticmethod
     def _read_human_time_range(page: Any) -> str | None:
         """Read the visible SuperDatePicker label without relying on a panel ID."""
         locator = page.locator('[data-test-subj="superDatePickerShowDatesButton"]')
@@ -217,7 +232,7 @@ class OpenSearchScraper:
         return " ".join(value.split()) or None
 
     def _find_results_table(self, page: Any) -> tuple[Any, dict[str, int]]:
-        page.wait_for_selector("table", timeout=30_000)
+        self._wait_for_result_surface(page)
         tables = page.locator("table")
         table_count = tables.count()
         for index in range(table_count):

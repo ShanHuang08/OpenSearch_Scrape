@@ -1,4 +1,12 @@
-﻿from scraper import LOGIN_SELECTORS, OpenSearchScraper
+﻿import pytest
+
+from scraper import (
+    LOGIN_SELECTORS,
+    NO_RESULTS_SELECTOR,
+    RESULT_SURFACE_SELECTOR,
+    OpenSearchScraper,
+    ScrapeError,
+)
 
 
 def test_header_map_uses_names_instead_of_fixed_columns() -> None:
@@ -46,3 +54,28 @@ def test_time_range_label_removes_show_dates_suffix() -> None:
             return FakeLocator()
 
     assert OpenSearchScraper._read_human_time_range(FakePage()) == "Last 1 week"
+
+
+def test_no_results_prompt_stops_waiting_immediately() -> None:
+    class FakeLocator:
+        @property
+        def first(self):
+            return self
+
+        def count(self) -> int:
+            return 1
+
+        def is_visible(self) -> bool:
+            return True
+
+    class FakePage:
+        def wait_for_selector(self, selector: str, timeout: int) -> None:
+            assert selector == RESULT_SURFACE_SELECTOR
+            assert timeout == 30_000
+
+        def locator(self, selector: str) -> FakeLocator:
+            assert selector == NO_RESULTS_SELECTOR
+            return FakeLocator()
+
+    with pytest.raises(ScrapeError, match="找不到符合條件的 log"):
+        OpenSearchScraper._wait_for_result_surface(FakePage())
