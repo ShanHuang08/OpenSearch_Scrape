@@ -13,7 +13,6 @@ from sheets import (
     LEGACY_SHEET_HEADERS,
     SHEET_HEADERS,
     GoogleSheetsWriter,
-    _record_key_from_remark,
     record_to_legacy_sheet_row,
     record_to_sheet_row,
     worksheet_name_from_records,
@@ -77,6 +76,19 @@ def test_worksheet_name_is_derived_from_provider_url() -> None:
     assert worksheet_name_from_records([record]) == "casinogate"
 
 
+def test_worksheet_name_is_derived_when_provider_ends_the_url() -> None:
+    record = normalize_row(
+        RawLogRow(url="/api/v1/vendor"),
+        scraped_at=datetime(2026, 7, 27, tzinfo=UTC),
+        environment=resolve_environment("QA"),
+        query='"gro260727001"',
+        time_from="now-1w",
+        time_to="now",
+    )
+
+    assert worksheet_name_from_records([record]) == "vendor"
+
+
 def test_new_dynamic_worksheet_uses_legacy_headers_and_column_widths(
     tmp_path, monkeypatch
 ) -> None:
@@ -121,9 +133,8 @@ def test_new_dynamic_worksheet_uses_legacy_headers_and_column_widths(
         def freeze(self, rows):
             self.frozen_rows = rows
 
-        def col_values(self, column_number):
-            assert column_number == 9
-            return ["remark"]
+        def get_all_values(self):
+            return [LEGACY_SHEET_HEADERS]
 
         def append_rows(self, rows, value_input_option):
             assert value_input_option == "RAW"
@@ -213,6 +224,7 @@ def test_legacy_sheet_row_matches_existing_target_layout() -> None:
             url="/api/v1/wallet",
             operatorUrl="https://operator.example/wallet",
             timeTaken="106",
+            error="GameSessionExpiredException",
         ),
         scraped_at=datetime(2026, 7, 19, tzinfo=UTC),
         environment=resolve_environment("QA"),
@@ -226,11 +238,9 @@ def test_legacy_sheet_row_matches_existing_target_layout() -> None:
     assert len(row) == len(LEGACY_SHEET_HEADERS)
     assert row[LEGACY_SHEET_HEADERS.index("username")] == "user-1"
     assert row[LEGACY_SHEET_HEADERS.index("game code")] == "game-2"
-    assert _record_key_from_remark(row[-1]) == record.record_key
-
-
-def test_record_key_is_not_guessed_from_invalid_remark() -> None:
-    assert _record_key_from_remark("recordKey=not-a-real-key") is None
+    assert row[LEGACY_SHEET_HEADERS.index("remark")] == (
+        "error=GameSessionExpiredException"
+    )
 
 
 def test_oauth_migrates_and_refreshes_existing_token(tmp_path, monkeypatch) -> None:
@@ -330,9 +340,8 @@ def test_writer_upserts_existing_legacy_sheet_row(tmp_path, monkeypatch) -> None
             assert row_number == 1
             return LEGACY_SHEET_HEADERS
 
-        def col_values(self, column_number):
-            assert column_number == 9
-            return ["remark", f"recordKey={record.record_key}"]
+        def get_all_values(self):
+            return [LEGACY_SHEET_HEADERS, record_to_legacy_sheet_row(record)]
 
         def batch_update(self, updates, value_input_option):
             assert value_input_option == "RAW"

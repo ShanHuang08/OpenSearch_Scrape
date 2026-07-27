@@ -264,6 +264,37 @@ GOOGLE_SPREADSHEET_ID=你的Spreadsheet_ID
 GOOGLE_WORKSHEET_NAME=
 ```
 
+#### OAuth token 過期與重新授權
+
+`client_secret_*.json` 是 OAuth 應用程式憑證，不是存取 token，通常不需要因
+token 過期而重新建立。使用者完成瀏覽器授權後，程式會將 access token 與
+refresh token 儲存在 `GOOGLE_TOKEN_FILE`，預設為 `google-token.json`。
+
+- Access token 是短期 token；過期時程式會使用 refresh token 自動更新，通常不需要人工處理。
+- Internal OAuth app 的 refresh token 不受 External + Testing 模式的 7 天期限限制。
+- Refresh token 仍可能因使用者撤銷授權、長期未使用、Google Workspace 管理員政策或 token 數量限制而失效。
+
+如果 CLI 顯示 OAuth token 已失效、`invalid_grant` 或無法 refresh，刪除本機
+token 檔後重新執行原指令：
+
+macOS／Linux：
+
+```bash
+rm /Users/${user}/open-search/google-token.json
+open-search -k your-keyword -e QA --google-sheets
+```
+
+Windows：
+
+```cmd
+del C:\Users\%USERNAME%\open-search\google-token.json
+open-search -k your-keyword -e QA --google-sheets
+```
+
+下一次執行會重新開啟瀏覽器要求登入／同意授權，並建立新的
+`google-token.json`。不需要刪除或重新下載 `client_secret_*.json`。如果
+`GOOGLE_TOKEN_FILE` 設定為其他路徑，請刪除該設定所指向的 token 檔案。
+
 常見錯誤：
 
 - `GOOGLE_AUTH_MODE=service-account` 搭配 `client_secret_*.json`：請改用 Service Account JSON，或將模式改成 `oauth`。

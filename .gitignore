@@ -16,6 +16,7 @@ dist/
 build/
 *.egg-info/
 output/
+docs/
 browser-profile/
 playwright/.auth/
 google-credentials*.json

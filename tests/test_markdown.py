@@ -25,7 +25,7 @@ def test_empty_report_renders_summary() -> None:
         executed_at=executed_at,
     )
     assert "OpenSearch Log Report" in content
-    assert "api-request-logs-qa-*" in content
+    assert "api-request-logs-qa*" in content
     assert "沒有符合條件的 log" in content
 
 

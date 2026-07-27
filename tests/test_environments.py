@@ -7,7 +7,7 @@ from environments import resolve_environment
 def test_resolve_qa(value: str) -> None:
     environment = resolve_environment(value)
     assert environment.name == "QA"
-    assert environment.pattern_name == "api-request-logs-qa-*"
+    assert environment.pattern_name == "api-request-logs-qa*"
     assert environment.index_pattern_id == "53ceb180-8f5d-11ef-b9c6-73a60e0d81fe"
 
 

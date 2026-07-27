@@ -54,11 +54,11 @@ recordKey, scrapedAt, environment, indexPatternName, indexPatternId, query, time
 username, game code, requestBody, responseBody, url, operatorData, operatorResponse, operatorUrl, remark
 ```
 
-9 欄格式會把 `recordKey`、抓取時間、request time、耗時與錯誤資訊保存到 `remark`，因此仍可使用 upsert。其他表頭格式會停止寫入，避免覆蓋錯誤資料。
+9 欄格式的 `remark` 只保存 `error=<錯誤內容>`。Upsert 使用 A–H 欄內容比對既有資料；其他表頭格式會停止寫入，避免覆蓋錯誤資料。
 
 `GOOGLE_WRITE_MODE`：
 
-- `upsert`：以 `recordKey` 判斷；已存在就更新，不存在就新增。建議使用。
+- `upsert`：21 欄格式以 `recordKey` 判斷；9 欄格式以 A–H 欄內容判斷。已存在就更新，不存在就新增。建議使用。
 - `append`：每次都新增，可能產生重複資料。
 
 單一儲存格上限為 50,000 字元。超過時會停止 Sheet 寫入並保留 Markdown。
@@ -139,7 +139,7 @@ google-service-account*.json
 | I | `remark` | 100 |
 - 表頭不相容：將第一列改成支援的 21 欄或 9 欄格式，或改用專用工作表。
 - OAuth token 失效：刪除本機 `google-token.json` 後重新執行，完成一次瀏覽器授權。
-- 重複資料：確認 `GOOGLE_WRITE_MODE=upsert`；21 欄格式以第一欄、9 欄格式以 `remark` 中的 `recordKey` 判斷。
+- 重複資料：確認 `GOOGLE_WRITE_MODE=upsert`；21 欄格式以第一欄的 `recordKey`、9 欄格式以 A–H 欄內容判斷。
 
 ## 停用 Google Sheets
 

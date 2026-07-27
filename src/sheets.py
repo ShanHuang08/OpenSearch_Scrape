@@ -38,9 +38,7 @@ SHEET_HEADERS = [
     "parseWarnings",
 ]
 
-# Compatibility layout used by the existing target spreadsheet.  The record
-# key is kept in ``remark`` so upsert remains deterministic without changing
-# the user's established columns.
+# Compatibility layout used by the existing target spreadsheet.
 LEGACY_SHEET_HEADERS = [
     "username",
     "game code",
@@ -57,7 +55,7 @@ LEGACY_COLUMN_WIDTHS = [100, 100, 201, 217, 100, 403, 178, 100, 100]
 GOOGLE_SHEETS_CELL_CHAR_LIMIT = 50_000
 GOOGLE_SHEETS_SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 T = TypeVar("T")
-PROVIDER_URL_PATTERN = re.compile(r"^/api/v1/([^/]+)/", re.IGNORECASE)
+PROVIDER_URL_PATTERN = re.compile(r"^/api/v1/([^/]+)(?:/|$)", re.IGNORECASE)
 
 
 @dataclass(slots=True)
@@ -132,13 +130,6 @@ def record_to_sheet_row(record: LogRecord) -> list[str]:
 
 
 def record_to_legacy_sheet_row(record: LogRecord) -> list[str]:
-    remark_parts = [
-        f"recordKey={record.record_key}",
-        f"scrapedAt={record.scraped_at.isoformat()}",
-        f"requestTime={record.request_time or ''}",
-        f"timeTaken={record.time_taken.rendered}",
-        f"error={record.error.rendered}",
-    ]
     return [
         record.username or "",
         record.game_code or "",
@@ -148,13 +139,14 @@ def record_to_legacy_sheet_row(record: LogRecord) -> list[str]:
         record.operator_data.rendered,
         record.operator_response.rendered,
         record.operator_url.original or "",
-        "; ".join(remark_parts),
+        f"error={record.error.rendered}",
     ]
 
 
-def _record_key_from_remark(value: str) -> str | None:
-    match = re.search(r"(?:^|;\s*)recordKey=([0-9a-f]{64})(?:;|$)", value)
-    return match.group(1) if match else None
+def _legacy_row_key(row: list[str]) -> tuple[str, ...]:
+    """Build an upsert key from the visible A-H legacy columns."""
+    padded = [*row[:8], *([""] * max(0, 8 - len(row)))]
+    return tuple(padded)
 
 
 def _chunks(values: list[T], size: int) -> Iterable[list[T]]:
@@ -393,20 +385,28 @@ class GoogleSheetsWriter:
             return result
 
         if active_headers == LEGACY_SHEET_HEADERS:
-            existing_values = api_call(worksheet.col_values, 9)[1:]
-            existing_keys = [_record_key_from_remark(value) for value in existing_values]
+            existing_rows = api_call(worksheet.get_all_values)[1:]
+            key_to_row = {
+                _legacy_row_key(row): row_number
+                for row_number, row in enumerate(existing_rows, start=2)
+            }
         else:
             existing_keys = api_call(worksheet.col_values, 1)[1:]
-        key_to_row = {
-            key: row_number
-            for row_number, key in enumerate(existing_keys, start=2)
-            if key
-        }
+            key_to_row = {
+                key: row_number
+                for row_number, key in enumerate(existing_keys, start=2)
+                if key
+            }
         updates = []
         additions = []
         last_column = _column_name(len(active_headers))
         for record, row in zip(records, rows, strict=True):
-            existing_row = key_to_row.get(record.record_key)
+            row_key = (
+                _legacy_row_key(row)
+                if active_headers == LEGACY_SHEET_HEADERS
+                else record.record_key
+            )
+            existing_row = key_to_row.get(row_key)
             if existing_row is None:
                 additions.append(row)
             else:

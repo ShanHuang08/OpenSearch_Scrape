@@ -42,7 +42,11 @@ LOGIN_SELECTORS = {
     ),
 }
 NO_RESULTS_SELECTOR = '[data-test-subj="discoverNoResults"]'
+QUERY_LOADING_SELECTOR = (
+    '[data-test-subj="loadingSpinner"], [data-test-subj="loadingSpinnerText"]'
+)
 RESULT_SURFACE_SELECTOR = f"table, {NO_RESULTS_SELECTOR}"
+RESULT_SURFACE_TIMEOUT_MS = 30_000
 
 
 class ScrapeError(RuntimeError):
@@ -125,6 +129,12 @@ class OpenSearchScraper:
             raise ScrapeError(f"OpenSearch 擷取失敗：{type(exc).__name__}") from exc
 
     def _verify_security_state(self, page: Any) -> None:
+        body_text = page.locator("body").inner_text(timeout=10_000).lower()
+        if re.search(r"\berror\s*1033\b", body_text) and (
+            "cloudflare tunnel error" in body_text
+        ):
+            raise ScrapeError("Error 1033: Cloudflare Tunnel error")
+
         challenge_markers = [
             "captcha",
             "recaptcha",
@@ -134,7 +144,6 @@ class OpenSearchScraper:
             "two-factor authentication",
             "multi-factor authentication",
         ]
-        body_text = page.locator("body").inner_text(timeout=10_000).lower()
         if any(marker in body_text for marker in challenge_markers):
             raise SecurityChallengeError("登入遇到 CAPTCHA、MFA 或 OTP，需要人工完成驗證。")
         captcha_selector = 'iframe[src*="captcha" i], [class*="captcha" i], [id*="captcha" i]'
@@ -218,8 +227,25 @@ class OpenSearchScraper:
 
     @classmethod
     def _wait_for_result_surface(cls, page: Any) -> None:
-        page.wait_for_selector(RESULT_SURFACE_SELECTOR, timeout=30_000)
-        cls._raise_if_no_results(page)
+        deadline = time.monotonic() + RESULT_SURFACE_TIMEOUT_MS / 1000
+        while True:
+            remaining_ms = max(1, int((deadline - time.monotonic()) * 1000))
+            page.wait_for_selector(RESULT_SURFACE_SELECTOR, timeout=remaining_ms)
+
+            no_results = page.locator(NO_RESULTS_SELECTOR)
+            if not (no_results.count() and no_results.first.is_visible()):
+                return
+
+            loading = page.locator(QUERY_LOADING_SELECTOR)
+            if loading.count() and loading.first.is_visible():
+                loading.first.wait_for(state="hidden", timeout=remaining_ms)
+                continue
+
+            # Discover can briefly render No Results between query submission
+            # and the results table. Confirm that the prompt remains visible
+            # after the loading indicator has disappeared.
+            page.wait_for_timeout(250)
+            cls._raise_if_no_results(page)
 
     @staticmethod
     def _read_human_time_range(page: Any) -> str | None:

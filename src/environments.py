@@ -13,7 +13,7 @@ class EnvironmentSpec:
 ENVIRONMENTS: dict[str, EnvironmentSpec] = {
     "qa": EnvironmentSpec(
         name="QA",
-        pattern_name="api-request-logs-qa-*",
+        pattern_name="api-request-logs-qa*",
         index_pattern_id="53ceb180-8f5d-11ef-b9c6-73a60e0d81fe",
     ),
     "staging": EnvironmentSpec(
