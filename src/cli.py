@@ -5,6 +5,7 @@ import plistlib
 import shutil
 import subprocess
 import sys
+import traceback
 import webbrowser
 from datetime import datetime
 from pathlib import Path
@@ -121,6 +122,11 @@ def build_parser() -> argparse.ArgumentParser:
         action=argparse.BooleanOptionalAction,
         default=None,
         help="寫入 Google Sheets；預設依 GOOGLE_SHEETS_ENABLED（預設 false）",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="發生錯誤時將完整 Python traceback 寫入 output/error.log。",
     )
     return parser
 
@@ -343,9 +349,24 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return run(args)
-    except (ValueError, ScrapeError, NotImplementedError) as exc:
+    except Exception as exc:
+        if args.debug:
+            error_path = _write_debug_log(exc)
+            print(f"詳細 traceback 已寫入：{error_path}", file=sys.stderr)
         print(f"錯誤：{exc}", file=sys.stderr)
         return 1
+
+
+def _write_debug_log(exc: Exception) -> Path:
+    """Write the full exception traceback for Codex-assisted debugging."""
+    error_path = Path("output") / "error.log"
+    try:
+        error_path.parent.mkdir(parents=True, exist_ok=True)
+        error_path.write_text(traceback.format_exc(), encoding="utf-8")
+    except OSError:
+        error_path = Path("error.log")
+        error_path.write_text(traceback.format_exc(), encoding="utf-8")
+    return error_path.resolve()
 
 
 if __name__ == "__main__":  # pragma: no cover
