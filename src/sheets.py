@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from itertools import islice
 from pathlib import Path
-from typing import TypeVar
+from typing import Any, TypeVar
 from urllib.parse import urlparse
 
 from tenacity import Retrying, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -56,6 +56,17 @@ GOOGLE_SHEETS_CELL_CHAR_LIMIT = 50_000
 GOOGLE_SHEETS_SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 T = TypeVar("T")
 PROVIDER_URL_PATTERN = re.compile(r"^/api/v1/([^/]+)(?:/|$)", re.IGNORECASE)
+JSON_SCALAR_LINE_PATTERN = re.compile(
+    r'^\s*"(?P<key>(?:\\.|[^"\\])*)"\s*:\s*(?P<value>.+?)\s*,?\s*$'
+)
+NUMERIC_VALUE_PATTERN = re.compile(r"^-?(?:0|[1-9]\d*)(?:\.\d+)?$")
+HIGHLIGHT_COLORS = {
+    "externalTransactionId": {"red": 0.0, "green": 0.0, "blue": 1.0},
+    "roundId": {"red": 1.0, "green": 0.0, "blue": 0.0},
+    "amount": {"red": 0.0, "green": 0.39, "blue": 0.0},
+    "betAmount": {"red": 0.0, "green": 0.39, "blue": 0.0},
+    "winAmount": {"red": 0.0, "green": 0.39, "blue": 0.0},
+}
 
 
 @dataclass(slots=True)
@@ -67,6 +78,21 @@ class SheetsWriteResult:
     skipped: int = 0
     failed: int = 0
     message: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _JsonScalarLine:
+    key: str
+    value_keys: frozenset[str]
+    start_index: int
+    end_index: int
+
+
+@dataclass(frozen=True, slots=True)
+class _HighlightRange:
+    start_index: int
+    end_index: int
+    color: dict[str, float]
 
 
 def _read_credentials_json(path: Path) -> dict:
@@ -161,6 +187,194 @@ def _column_name(number: int) -> str:
         number, remainder = divmod(number - 1, 26)
         value = chr(65 + remainder) + value
     return value
+
+
+def _numeric_value_key(value: str) -> str | None:
+    candidate = value.strip()
+    if not NUMERIC_VALUE_PATTERN.fullmatch(candidate):
+        return None
+    integer_part = candidate.lstrip("-").split(".", 1)[0]
+    if len(integer_part) > 1 and integer_part.startswith("0"):
+        return None
+    normalized = candidate.rstrip("0").rstrip(".") if "." in candidate else candidate
+    if normalized in {"", "-"}:
+        return None
+    if normalized == "-0":
+        normalized = "0"
+    return f"number:{normalized}"
+
+
+def _highlight_value_keys(value: Any) -> frozenset[str]:
+    if value is None or isinstance(value, (bool, list, dict)):
+        return frozenset()
+
+    text_value = str(value)
+    keys = {f"exact:{text_value}"}
+    numeric_key = _numeric_value_key(text_value)
+    if numeric_key:
+        keys.add(numeric_key)
+    return frozenset(keys)
+
+
+def _json_scalar_lines(text: str) -> list[_JsonScalarLine]:
+    lines: list[_JsonScalarLine] = []
+    cursor = 0
+    for line in text.splitlines(keepends=True):
+        visible_line = line.rstrip("\r\n")
+        match = JSON_SCALAR_LINE_PATTERN.match(visible_line)
+        if match:
+            try:
+                key = json.loads(f'"{match.group("key")}"')
+                value = json.loads(match.group("value").rstrip().removesuffix(","))
+            except json.JSONDecodeError:
+                cursor += len(line)
+                continue
+            value_keys = _highlight_value_keys(value)
+            if value_keys:
+                lines.append(
+                    _JsonScalarLine(
+                        key=key,
+                        value_keys=value_keys,
+                        start_index=cursor,
+                        end_index=cursor + len(visible_line),
+                    )
+                )
+        cursor += len(line)
+    return lines
+
+
+def _dedupe_highlight_ranges(ranges: list[_HighlightRange]) -> list[_HighlightRange]:
+    deduped: dict[tuple[int, int], _HighlightRange] = {}
+    for highlight_range in ranges:
+        deduped.setdefault(
+            (highlight_range.start_index, highlight_range.end_index),
+            highlight_range,
+        )
+    return sorted(deduped.values(), key=lambda item: item.start_index)
+
+
+def _matched_json_highlight_ranges(
+    request_body: str, operator_data: str
+) -> tuple[list[_HighlightRange], list[_HighlightRange]]:
+    request_lines = _json_scalar_lines(request_body)
+    operator_lines = _json_scalar_lines(operator_data)
+    request_ranges: list[_HighlightRange] = []
+    operator_ranges: list[_HighlightRange] = []
+
+    for operator_line in operator_lines:
+        color = HIGHLIGHT_COLORS.get(operator_line.key)
+        if color is None:
+            continue
+        matched_request_lines = [
+            request_line
+            for request_line in request_lines
+            if operator_line.value_keys & request_line.value_keys
+        ]
+        if not matched_request_lines:
+            continue
+
+        operator_ranges.append(
+            _HighlightRange(operator_line.start_index, operator_line.end_index, color)
+        )
+        request_ranges.extend(
+            _HighlightRange(request_line.start_index, request_line.end_index, color)
+            for request_line in matched_request_lines
+        )
+
+    return (
+        _dedupe_highlight_ranges(request_ranges),
+        _dedupe_highlight_ranges(operator_ranges),
+    )
+
+
+def _text_format_runs(
+    text: str, highlight_ranges: list[_HighlightRange]
+) -> list[dict[str, Any]]:
+    runs: list[dict[str, Any]] = []
+    cursor = 0
+    for highlight_range in highlight_ranges:
+        if highlight_range.start_index > cursor:
+            runs.append({"startIndex": cursor, "format": {}})
+        runs.append(
+            {
+                "startIndex": highlight_range.start_index,
+                "format": {"foregroundColor": dict(highlight_range.color)},
+            }
+        )
+        cursor = highlight_range.end_index
+    if cursor < len(text):
+        runs.append({"startIndex": cursor, "format": {}})
+    return runs
+
+
+def _rich_text_update_request(
+    sheet_id: int,
+    row_number: int,
+    column_index: int,
+    text: str,
+    highlight_ranges: list[_HighlightRange],
+) -> dict[str, Any]:
+    return {
+        "updateCells": {
+            "start": {
+                "sheetId": sheet_id,
+                "rowIndex": row_number - 1,
+                "columnIndex": column_index,
+            },
+            "rows": [
+                {
+                    "values": [
+                        {
+                            "userEnteredValue": {"stringValue": text},
+                            "textFormatRuns": _text_format_runs(text, highlight_ranges),
+                        }
+                    ]
+                }
+            ],
+            "fields": "userEnteredValue,textFormatRuns",
+        }
+    }
+
+
+def _value_highlight_requests_for_row(
+    sheet_id: int,
+    row_number: int,
+    headers: list[str],
+    row: list[str],
+) -> list[dict[str, Any]]:
+    try:
+        request_body_index = headers.index("requestBody")
+        operator_data_index = headers.index("operatorData")
+    except ValueError:
+        return []
+
+    request_body = row[request_body_index]
+    operator_data = row[operator_data_index]
+    request_ranges, operator_ranges = _matched_json_highlight_ranges(
+        request_body, operator_data
+    )
+    requests = []
+    if request_ranges:
+        requests.append(
+            _rich_text_update_request(
+                sheet_id,
+                row_number,
+                request_body_index,
+                request_body,
+                request_ranges,
+            )
+        )
+    if operator_ranges:
+        requests.append(
+            _rich_text_update_request(
+                sheet_id,
+                row_number,
+                operator_data_index,
+                operator_data,
+                operator_ranges,
+            )
+        )
+    return requests
 
 
 def _legacy_column_width_requests(sheet_id: int) -> list[dict]:
@@ -295,6 +509,59 @@ class GoogleSheetsWriter:
             credentials = self._oauth_credentials()
         return gspread.authorize(credentials)
 
+    def _locate_row_targets(
+        self,
+        api_call,
+        worksheet,
+        active_headers: list[str],
+        record_rows: list[tuple[LogRecord, list[str]]],
+    ) -> list[tuple[int, list[str]]]:
+        if active_headers == LEGACY_SHEET_HEADERS:
+            existing_rows = api_call(worksheet.get_all_values)[1:]
+            key_to_row = {
+                _legacy_row_key(row): row_number
+                for row_number, row in enumerate(existing_rows, start=2)
+            }
+            return [
+                (row_number, row)
+                for _record, row in record_rows
+                if (row_number := key_to_row.get(_legacy_row_key(row))) is not None
+            ]
+
+        existing_keys = api_call(worksheet.col_values, 1)[1:]
+        key_to_row = {
+            key: row_number
+            for row_number, key in enumerate(existing_keys, start=2)
+            if key
+        }
+        return [
+            (row_number, row)
+            for record, row in record_rows
+            if (row_number := key_to_row.get(record.record_key)) is not None
+        ]
+
+    def _apply_value_highlighting(
+        self,
+        api_call,
+        spreadsheet,
+        worksheet,
+        active_headers: list[str],
+        row_targets: list[tuple[int, list[str]]],
+    ) -> None:
+        sheet_id = getattr(worksheet, "id", None)
+        if sheet_id is None:
+            return
+
+        requests = [
+            request
+            for row_number, row in row_targets
+            for request in _value_highlight_requests_for_row(
+                sheet_id, row_number, active_headers, row
+            )
+        ]
+        for chunk in _chunks(requests, self.settings.google_batch_size):
+            api_call(spreadsheet.batch_update, {"requests": chunk})
+
     def write(self, records: list[LogRecord]) -> SheetsWriteResult:
         if not self.settings.google_sheets_enabled:
             return SheetsWriteResult(
@@ -382,6 +649,15 @@ class GoogleSheetsWriter:
             for chunk in _chunks(rows, self.settings.google_batch_size):
                 api_call(worksheet.append_rows, chunk, value_input_option="RAW")
                 result.added += len(chunk)
+            row_targets = self._locate_row_targets(
+                api_call,
+                worksheet,
+                active_headers,
+                list(zip(records, rows, strict=True)),
+            )
+            self._apply_value_highlighting(
+                api_call, spreadsheet, worksheet, active_headers, row_targets
+            )
             return result
 
         if active_headers == LEGACY_SHEET_HEADERS:
@@ -398,7 +674,8 @@ class GoogleSheetsWriter:
                 if key
             }
         updates = []
-        additions = []
+        update_targets = []
+        additions: list[tuple[LogRecord, list[str]]] = []
         last_column = _column_name(len(active_headers))
         for record, row in zip(records, rows, strict=True):
             row_key = (
@@ -408,16 +685,26 @@ class GoogleSheetsWriter:
             )
             existing_row = key_to_row.get(row_key)
             if existing_row is None:
-                additions.append(row)
+                additions.append((record, row))
             else:
                 updates.append(
                     {"range": f"A{existing_row}:{last_column}{existing_row}", "values": [row]}
                 )
+                update_targets.append((existing_row, row))
 
         for chunk in _chunks(updates, self.settings.google_batch_size):
             api_call(worksheet.batch_update, chunk, value_input_option="RAW")
             result.updated += len(chunk)
-        for chunk in _chunks(additions, self.settings.google_batch_size):
+        addition_rows = [row for _record, row in additions]
+        for chunk in _chunks(addition_rows, self.settings.google_batch_size):
             api_call(worksheet.append_rows, chunk, value_input_option="RAW")
             result.added += len(chunk)
+        row_targets = [*update_targets]
+        if additions:
+            row_targets.extend(
+                self._locate_row_targets(api_call, worksheet, active_headers, additions)
+            )
+        self._apply_value_highlighting(
+            api_call, spreadsheet, worksheet, active_headers, row_targets
+        )
         return result

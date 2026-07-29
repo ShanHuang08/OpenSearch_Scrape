@@ -67,10 +67,19 @@ python -m playwright install chromium && \
 `PATH`：
 
 ```bash
-export PATH="/Users/${user}/open-search/.venv/bin:$PATH"
+export PATH="$HOME/open-search/.venv/bin:$PATH"
 ```
 
 建議將這行加入 `~/.zshrc`，再執行 `source ~/.zshrc` 立即套用。
+
+```bash
+echo 'export PATH="$HOME/open-search/.venv/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+如果只是執行 `source .venv/bin/activate`，`open-search` 只會在目前這個
+Terminal 視窗可用；關掉視窗後 PATH 會還原，新視窗就可能出現
+`zsh: command not found: open-search`。
 
 `-print -quit` 會使用找到的第一個同名目錄；如果電腦上有多個專案副本，
 建議改用明確的 `cd` 路徑。
@@ -118,7 +127,7 @@ open-search --env QA --keyword groove --google-sheets
 open-search ^
   --env QA ^
   --keyword casinoGate ^
-  --max-records 50 ^
+  --max-records 200 ^
   --no-open-output
 ```
 
@@ -136,7 +145,7 @@ open-search --env QA --keyword groove or cs20260716071044 --dry-run
 open-search `
   --env QA `
   --keyword casinoGate `
-  --max-records 50 `
+  --max-records 200 `
   --no-open-output
 ```
 
@@ -156,7 +165,7 @@ open-search --env QA --keyword groove --google-sheets
 open-search \
   --env QA \
   --keyword casinoGate \
-  --max-records 50 \
+  --max-records 200 \
   --no-open-output
 ```
 
@@ -165,7 +174,7 @@ open-search \
 ```text
 --time-from now-1w
 --time-to now
---max-records 100
+--max-records 200
 --headless / --no-headless
 --open-output / --no-open-output
 --output-dir output
@@ -345,12 +354,12 @@ open-search --clear-log --env QA --keyword groove
 若 CLI 指令尚未加入 PATH，Windows CMD／PowerShell 與 macOS 都可以使用模組方式：
 
 ```text
-python -m cli --env QA --keyword groove --max-records 50
+python -m cli --env QA --keyword groove --max-records 200
 ```
 
 未提供 `--env` 或 `--keyword` 時，CLI 會進入互動輸入模式。
 
-`--max-records` 預設為 `50`，避免一次查詢及下載過多 log。需要更多資料時，請明確指定較大的數值；仍建議搭配較窄的時間範圍使用。
+`--max-records` 預設為 `200`，避免一次查詢及下載過多 log。需要更多資料時，請明確指定較大的數值；仍建議搭配較窄的時間範圍使用。
 
 登入 selector 維護請參考 [LOGIN_SELECTORS.md](LOGIN_SELECTORS.md)，完整需求請參考 [REQUIREMENTS.md](REQUIREMENTS.md)。
 

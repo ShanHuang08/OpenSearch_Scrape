@@ -75,9 +75,9 @@ def test_query_slug() -> None:
     assert query_slug(["Groove", "cs20260716071044"]) == "groove-or-cs20260716071044"
 
 
-def test_cli_defaults_to_fifty_records() -> None:
+def test_cli_defaults_to_200_records() -> None:
     args = build_parser().parse_args(["--env", "QA", "--keyword", "groove"])
-    assert args.max_records == 50
+    assert args.max_records == 200
 
 
 def test_cli_keeps_environment_alias_for_compatibility() -> None:

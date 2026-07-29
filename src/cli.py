@@ -94,8 +94,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max-records",
         type=int,
-        default=50,
-        help="最多擷取筆數（預設 50；使用 0 以下會被拒絕）",
+        default=200,
+        help="最多擷取筆數（預設 200；使用 0 以下會被拒絕）",
     )
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument(

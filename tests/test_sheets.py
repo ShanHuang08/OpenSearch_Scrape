@@ -13,6 +13,7 @@ from sheets import (
     LEGACY_SHEET_HEADERS,
     SHEET_HEADERS,
     GoogleSheetsWriter,
+    _value_highlight_requests_for_row,
     record_to_legacy_sheet_row,
     record_to_sheet_row,
     worksheet_name_from_records,
@@ -243,6 +244,55 @@ def test_legacy_sheet_row_matches_existing_target_layout() -> None:
     )
 
 
+def test_value_highlight_requests_match_operator_values_to_request_body() -> None:
+    row = [
+        "user-1",
+        "game-2",
+        json.dumps(
+            {
+                "transactionId": "tx-1",
+                "round": "round-1",
+                "amount": 100,
+                "payout": "25.50",
+            },
+            indent=2,
+        ),
+        "{}",
+        "/api/v1/wallet",
+        json.dumps(
+            {
+                "externalTransactionId": "tx-1",
+                "roundId": "round-1",
+                "amount": "100.00",
+                "betAmount": "100.00",
+                "winAmount": 25.5,
+            },
+            indent=2,
+        ),
+        "{}",
+        "https://operator.example/wallet",
+        "error=",
+    ]
+
+    requests = _value_highlight_requests_for_row(321, 2, LEGACY_SHEET_HEADERS, row)
+
+    assert [request["updateCells"]["start"]["columnIndex"] for request in requests] == [2, 5]
+    request_body_runs = requests[0]["updateCells"]["rows"][0]["values"][0][
+        "textFormatRuns"
+    ]
+    operator_data_runs = requests[1]["updateCells"]["rows"][0]["values"][0][
+        "textFormatRuns"
+    ]
+    colors = [
+        run["format"].get("foregroundColor")
+        for run in [*request_body_runs, *operator_data_runs]
+        if run["format"].get("foregroundColor")
+    ]
+    assert {"red": 0.0, "green": 0.0, "blue": 1.0} in colors
+    assert {"red": 1.0, "green": 0.0, "blue": 0.0} in colors
+    assert {"red": 0.0, "green": 0.39, "blue": 0.0} in colors
+
+
 def test_oauth_migrates_and_refreshes_existing_token(tmp_path, monkeypatch) -> None:
     token_path = tmp_path / "google-token.json"
     token_path.write_text(
@@ -392,3 +442,123 @@ def test_writer_upserts_existing_legacy_sheet_row(tmp_path, monkeypatch) -> None
     assert result.updated == 1
     assert worksheet.batch_updates[0]["range"] == "A2:I2"
     assert worksheet.appended_rows == []
+
+
+def test_writer_applies_rich_text_highlighting_to_matching_values(
+    tmp_path, monkeypatch
+) -> None:
+    record = normalize_row(
+        RawLogRow(
+            requestTime="Jul 14, 2026 @ 11:23:52.129",
+            requestBody=json.dumps(
+                {
+                    "transactionId": "tx-1",
+                    "round": "round-1",
+                    "amount": 100,
+                }
+            ),
+            operatorData=json.dumps(
+                {
+                    "externalTransactionId": "tx-1",
+                    "roundId": "round-1",
+                    "amount": "100.00",
+                    "betAmount": "100.00",
+                }
+            ),
+            url="/api/v1/wallet",
+        ),
+        scraped_at=datetime(2026, 7, 19, tzinfo=UTC),
+        environment=resolve_environment("QA"),
+        query='"user-1"',
+        time_from="now-1w",
+        time_to="now",
+    )
+    row = record_to_legacy_sheet_row(record)
+    credentials_file = tmp_path / "client-secret.json"
+    credentials_file.write_text("{}", encoding="utf-8")
+
+    class FakeWorksheet:
+        id = 321
+
+        def __init__(self):
+            self.batch_updates = []
+            self.appended_rows = []
+
+        def row_values(self, row_number):
+            assert row_number == 1
+            return LEGACY_SHEET_HEADERS
+
+        def get_all_values(self):
+            return [LEGACY_SHEET_HEADERS, row]
+
+        def batch_update(self, updates, value_input_option):
+            assert value_input_option == "RAW"
+            self.batch_updates.extend(updates)
+
+        def append_rows(self, rows, value_input_option):
+            self.appended_rows.extend(rows)
+
+    worksheet = FakeWorksheet()
+
+    class FakeSpreadsheet:
+        def __init__(self):
+            self.rich_text_updates = []
+
+        def worksheet(self, name):
+            assert name == "工作表1"
+            return worksheet
+
+        def batch_update(self, body):
+            self.rich_text_updates.append(body)
+
+    spreadsheet = FakeSpreadsheet()
+
+    class FakeClient:
+        def open_by_key(self, spreadsheet_id):
+            assert spreadsheet_id == "spreadsheet-id"
+            return spreadsheet
+
+    class FakeAPIError(Exception):
+        pass
+
+    class FakeRequestException(Exception):
+        pass
+
+    fake_gspread = ModuleType("gspread")
+    fake_gspread.exceptions = type("Exceptions", (), {"APIError": FakeAPIError})
+    fake_requests = ModuleType("requests")
+    fake_requests.RequestException = FakeRequestException
+    monkeypatch.setitem(sys.modules, "gspread", fake_gspread)
+    monkeypatch.setitem(sys.modules, "requests", fake_requests)
+
+    writer = GoogleSheetsWriter(
+        Settings(
+            google_sheets_enabled=True,
+            google_spreadsheet_id="spreadsheet-id",
+            google_worksheet_name="工作表1",
+            google_auth_mode="oauth",
+            google_credentials_file=credentials_file,
+        )
+    )
+    monkeypatch.setattr(writer, "_authorize", lambda gspread: FakeClient())
+
+    result = writer.write([record])
+
+    assert result.updated == 1
+    assert worksheet.appended_rows == []
+    requests = spreadsheet.rich_text_updates[0]["requests"]
+    assert [request["updateCells"]["start"]["columnIndex"] for request in requests] == [2, 5]
+    assert all(request["updateCells"]["start"]["rowIndex"] == 1 for request in requests)
+    text_format_runs = [
+        run
+        for request in requests
+        for run in request["updateCells"]["rows"][0]["values"][0]["textFormatRuns"]
+    ]
+    colors = [
+        run["format"].get("foregroundColor")
+        for run in text_format_runs
+        if run["format"].get("foregroundColor")
+    ]
+    assert {"red": 0.0, "green": 0.0, "blue": 1.0} in colors
+    assert {"red": 1.0, "green": 0.0, "blue": 0.0} in colors
+    assert {"red": 0.0, "green": 0.39, "blue": 0.0} in colors

@@ -12,7 +12,7 @@ OpenSearch Scrape 使用瀏覽器登入 OpenSearch Dashboard，依環境及關�
 2. Markdown 永遠先寫入；Google Sheets 失敗時仍保留 Markdown。
 3. QA 與 staging 必須使用固定白名單 index pattern，不接受任意 ID。
 4. 登入憑證、Google 憑證與 token 不得寫入程式碼、報告或 Git。
-5. 預設限制最多擷取 50 筆，避免對 Dashboard 造成過大負載。
+5. 預設限制最多擷取 200 筆，避免對 Dashboard 造成過大負載。
 
 ## 2. 執行環境
 
@@ -91,7 +91,7 @@ open-search --env QA --keyword groove or cs123
 
 | 項目 | 預設值 |
 | --- | --- |
-| `max_records` | `50` |
+| `max_records` | `200` |
 | `headless` | `true` |
 | `open_output` | `true` |
 | `time_from` | `now-1w` |
@@ -327,6 +327,9 @@ username, game code, requestBody, responseBody, url, operatorData, operatorRespo
 - 批次大小可設定，預設 100。
 - API 暫時錯誤採最多 3 次指數退避重試。
 - 單一儲存格超過 50,000 字元時停止 Sheet 寫入，不得靜默截斷。
+- `operatorData.externalTransactionId` 的值若與 `requestBody` 任一參數值相同，兩邊對應 JSON 行文字標為藍色。
+- `operatorData.roundId` 的值若與 `requestBody` 任一參數值相同，兩邊對應 JSON 行文字標為紅色。
+- `operatorData.amount`、`operatorData.betAmount` 或 `operatorData.winAmount` 的值若與 `requestBody` 任一參數值相同，兩邊對應 JSON 行文字標為深綠色。
 - Sheet 寫入失敗時保留 Markdown，CLI 回報失敗。
 
 ## 12. 設定與安全
@@ -384,7 +387,7 @@ Markdown 與 Sheet 可能包含使用者資料、token、URL 或營運資訊，�
 2. `123 or 456` 產生 KQL `"123" or "456"`。
 3. 尾端 `or`／`and` 按第 5.2 節移除，只有運算子時拒絕。
 4. QA、staging、stg 使用正確固定 index pattern。
-5. 未提供 `--max-records` 時最多取得 50 筆。
+5. 未提供 `--max-records` 時最多取得 200 筆。
 6. 虛擬化表格可持續捲動、保存、去重，並在輸出前反轉為較早到較晚。
 7. JSON、URL encoded、空值、非法內容及 code fence 均可安全輸出。
 8. Markdown 檔名及摘要包含環境、查詢與執行時間。
