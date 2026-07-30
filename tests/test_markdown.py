@@ -97,3 +97,68 @@ def test_log_directory_has_new_tab_opensearch_link() -> None:
     )
     assert '<a href="https://example.test/discover#?_q=query%3A%27casinoGate%27"' in content
     assert 'target="_blank"' in content
+
+
+def test_excluded_report_shows_filter_counts_and_continuous_log_numbers() -> None:
+    executed_at = datetime(2026, 7, 19, tzinfo=UTC)
+    records = [
+        normalize_row(
+            RawLogRow(url=f"/api/v1/log-{number}"),
+            scraped_at=executed_at,
+            environment=resolve_environment("QA"),
+            query='"casinoGate"',
+            time_from="now-1w",
+            time_to="now",
+        )
+        for number in (1, 3)
+    ]
+    content = render_markdown(
+        ScrapeResult(
+            records=records,
+            expected_total=3,
+            original_fetched_count=3,
+            excluded_count=1,
+            exclude_balance=True,
+        ),
+        environment=resolve_environment("QA"),
+        keywords=["casinoGate"],
+        kql='"casinoGate"',
+        time_from="now-1w",
+        time_to="now",
+        executed_at=executed_at,
+    )
+
+    assert "| 原始擷取筆數 | `3` |" in content
+    assert "| 排除筆數 | `1` |" in content
+    assert "| 實際輸出筆數 | `2` |" in content
+    assert "| 排除條件 | `--exclude-balance` |" in content
+    assert '<a id="log-1"></a>' in content
+    assert '<a id="log-2"></a>' in content
+    assert "## Log 2: `/api/v1/log-3`" in content
+
+
+def test_form_urlencoded_request_body_is_multiline_in_markdown() -> None:
+    executed_at = datetime(2026, 7, 19, tzinfo=UTC)
+    record = normalize_row(
+        RawLogRow(
+            url="/api/v1/vendor",
+            requestBody="operation=CREDIT&amount=311&jackpots=%7B%7D&",
+        ),
+        scraped_at=executed_at,
+        environment=resolve_environment("QA"),
+        query='"credit"',
+        time_from="now-1w",
+        time_to="now",
+    )
+
+    content = render_markdown(
+        ScrapeResult(records=[record]),
+        environment=resolve_environment("QA"),
+        keywords=["credit"],
+        kql='"credit"',
+        time_from="now-1w",
+        time_to="now",
+        executed_at=executed_at,
+    )
+
+    assert "operation=CREDIT&\namount=311&\njackpots={}&" in content

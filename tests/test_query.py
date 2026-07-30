@@ -1,4 +1,6 @@
-﻿import pytest
+﻿from types import SimpleNamespace
+
+import pytest
 
 from cli import (
     build_parser,
@@ -9,6 +11,7 @@ from cli import (
 )
 from config import Settings
 from environments import resolve_environment
+from models import RawLogRow
 from query import (
     build_discover_url,
     build_kql,
@@ -78,6 +81,174 @@ def test_query_slug() -> None:
 def test_cli_defaults_to_200_records() -> None:
     args = build_parser().parse_args(["--env", "QA", "--keyword", "groove"])
     assert args.max_records == 200
+
+
+def test_cli_exclude_url_is_repeatable_and_balance_is_opt_in() -> None:
+    defaults = build_parser().parse_args(["--env", "QA", "--keyword", "groove"])
+    configured = build_parser().parse_args(
+        [
+            "--env",
+            "QA",
+            "--keyword",
+            "groove",
+            "--exclude-url",
+            "/api/v1/one",
+            "--exclude-url",
+            "/api/v1/two",
+            "--exclude-balance",
+        ]
+    )
+
+    assert defaults.exclude_url == []
+    assert defaults.exclude_balance is False
+    assert configured.exclude_url == ["/api/v1/one", "/api/v1/two"]
+    assert configured.exclude_balance is True
+
+
+@pytest.mark.parametrize(
+    ("exclude_args", "expected_urls"),
+    [
+        (
+            [],
+            [
+                "/api/v1/softgaming",
+                "/api/v1/softgaming",
+                "/api/v1/esoterica/balance",
+                "/api/v1/bet",
+                "/api/v1/refund",
+            ],
+        ),
+        (
+            ["--exclude-balance"],
+            ["/api/v1/softgaming", "/api/v1/bet", "/api/v1/refund"],
+        ),
+        (
+            ["--exclude-url", "/api/v1/esoterica/balance"],
+            [
+                "/api/v1/softgaming",
+                "/api/v1/softgaming",
+                "/api/v1/bet",
+                "/api/v1/refund",
+            ],
+        ),
+        (
+            [
+                "--exclude-url",
+                "/api/v1/esoterica/balance",
+                "--exclude-url",
+                "/api/v1/refund",
+            ],
+            ["/api/v1/softgaming", "/api/v1/softgaming", "/api/v1/bet"],
+        ),
+        (
+            [
+                "--exclude-balance",
+                "--exclude-url",
+                "/api/v1/bet",
+                "--exclude-url",
+                "/api/v1/refund",
+            ],
+            ["/api/v1/softgaming"],
+        ),
+    ],
+)
+def test_cli_cross_checks_filtered_and_unfiltered_outputs(
+    monkeypatch,
+    tmp_path,
+    exclude_args: list[str],
+    expected_urls: list[str],
+) -> None:
+    raw_rows = [
+        RawLogRow(url="/api/v1/refund"),
+        RawLogRow(url="/api/v1/bet"),
+        RawLogRow(url="/api/v1/esoterica/balance"),
+        RawLogRow(
+            url="/api/v1/softgaming",
+            operatorUrl="https://operator.test/api/v2/wallet/balance",
+            error="",
+        ),
+        RawLogRow(
+            url="/api/v1/softgaming",
+            operatorUrl="https://operator.test/api/v2/wallet/balance",
+            error="OperatorApiException",
+        ),
+    ]
+    captured_markdown_records: list[str] = []
+    captured_sheet_records: list[str] = []
+
+    class FakeScraper:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def run(self) -> RawScrapeResult:
+            return RawScrapeResult(rows=raw_rows, expected_total=5)
+
+    class FakeSheetsWriter:
+        def __init__(self, settings) -> None:
+            pass
+
+        def write(self, records):
+            captured_sheet_records.extend(record.url.original for record in records)
+            return SimpleNamespace(
+                status="disabled",
+                added=0,
+                updated=0,
+                skipped=0,
+                failed=0,
+                message=None,
+            )
+
+    def fake_render(result, **kwargs) -> str:
+        captured_markdown_records.extend(record.url.original for record in result.records)
+        return "# report\n"
+
+    monkeypatch.setattr(
+        "cli.Settings.from_env",
+        lambda: Settings(output_dir=tmp_path, google_sheets_enabled=False),
+    )
+    monkeypatch.setattr("cli.OpenSearchScraper", FakeScraper)
+    monkeypatch.setattr("cli.GoogleSheetsWriter", FakeSheetsWriter)
+    monkeypatch.setattr("cli.render_markdown", fake_render)
+    monkeypatch.setattr("cli.write_markdown", lambda *args, **kwargs: tmp_path / "report.md")
+
+    exit_code = main(
+        [
+            "--env",
+            "QA",
+            "--keyword",
+            "groove",
+            "--no-open-output",
+            *exclude_args,
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured_markdown_records == expected_urls
+    assert captured_sheet_records == expected_urls
+
+
+def test_dry_run_displays_exclusions_without_scraping(monkeypatch, capsys) -> None:
+    def unexpected_scraper(*args, **kwargs):
+        raise AssertionError("dry-run 不得建立 scraper")
+
+    monkeypatch.setattr("cli.OpenSearchScraper", unexpected_scraper)
+
+    exit_code = main(
+        [
+            "--env",
+            "QA",
+            "--keyword",
+            "groove",
+            "--exclude-balance",
+            "--exclude-url",
+            "/api/v1/health",
+            "--dry-run",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "排除條件: --exclude-balance, URL=/api/v1/health" in captured.out
 
 
 def test_cli_keeps_environment_alias_for_compatibility() -> None:

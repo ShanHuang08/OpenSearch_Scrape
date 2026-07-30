@@ -119,6 +119,8 @@ open-search --env QA --keyword groove or cs20260716071044
 open-search --env QA --keyword groove and cs20260716071044
 open-search --env QA --keyword groove or cs20260716071044 --dry-run
 open-search --env QA --keyword groove --google-sheets
+open-search --env QA --keyword groove --exclude-balance
+open-search --env QA --keyword groove --exclude-url /api/v1/health
 ```
 
 多行指令使用 `^`：
@@ -360,6 +362,45 @@ python -m cli --env QA --keyword groove --max-records 200
 未提供 `--env` 或 `--keyword` 時，CLI 會進入互動輸入模式。
 
 `--max-records` 預設為 `200`，避免一次查詢及下載過多 log。需要更多資料時，請明確指定較大的數值；仍建議搭配較窄的時間範圍使用。
+
+查詢結果可在產生 Markdown 與寫入 Google Sheets 前排除：
+
+```text
+open-search --env QA --keyword groove --exclude-balance
+open-search --env QA --keyword groove \
+  --exclude-url /api/v1/esoterica/balance \
+  --exclude-url /api/v1/health
+```
+
+`--exclude-url` 可重複指定，並採用去除前後空白後的完整 URL 相等比對。
+
+`--exclude-balance` 使用以下優先順序：
+
+1. 主 URL 包含 `balance` 時直接排除。
+2. 主 URL 不含 `balance`，但格式剛好是 `/api/v1/<vendor>`（例如
+   `/api/v1/softgaming`）時，才改看 Operator URL。
+3. Operator URL 包含 `balance`，而且 Error 為空時排除。
+4. 主 URL 是 `/api/v1/<vendor>/<api_name>` 等較深路徑時，不使用
+   Operator URL 判斷；Operator URL 含 `balance` 也會保留。
+5. Operator balance log 若有 Error 會保留，方便調查錯誤。
+
+未提供這兩個參數時不會排除任何 log。
+
+若 requestBody 是 GET API 常見的 form-urlencoded 格式，Markdown 與 Google
+Sheets 會自動把參數分行。例如：
+
+```text
+operation=CREDIT&
+amount=311&
+amountCurrency=USD&
+transactionId=C80842-84790&
+```
+
+Percent encoding 仍會解碼，例如 `%7B%7D` 顯示為 `{}`；`+` 會保持原樣，
+不會被轉成空白。
+
+寫入 Google Sheets 的 log 資料列會統一使用水平靠左、垂直置中；既有的
+自動換行與 key-value 文字顏色仍會保留。
 
 登入 selector 維護請參考 [LOGIN_SELECTORS.md](LOGIN_SELECTORS.md)，完整需求請參考 [REQUIREMENTS.md](REQUIREMENTS.md)。
 

@@ -20,7 +20,13 @@
 | KQL | {{ kql | inline_code }} |
 | 時間範圍 | {{ (result.human_time_range or (time_from ~ ' → ' ~ time_to)) | inline_code }} |
 | 預期筆數 | {{ result.expected_total | inline_code }} |
+{% if result.excluded_urls or result.exclude_balance %}| 原始擷取筆數 | {{ result.original_fetched_count | inline_code }} |
+| 排除筆數 | {{ result.excluded_count | inline_code }} |
+| 實際輸出筆數 | {{ result.records | length | inline_code }} |
+| 排除條件 | {{ ((['--exclude-balance'] if result.exclude_balance else []) + result.excluded_urls) | join(', ') | inline_code }} |
+{% else %}
 | 實際擷取筆數 | {{ result.records | length | inline_code }} |
+{% endif %}
 | 重複筆數 | {{ result.duplicate_count | inline_code }} |
 | 解析／執行警告數 | {{ warning_count | inline_code }} |
 {% if result.incomplete_reason %}| 未完成原因 | {{ result.incomplete_reason | inline_code }} |

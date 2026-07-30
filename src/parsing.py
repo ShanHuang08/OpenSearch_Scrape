@@ -11,6 +11,7 @@ from environments import EnvironmentSpec
 from models import LogRecord, ParsedField, RawLogRow
 
 PERCENT_ENCODED = re.compile(r"%[0-9a-fA-F]{2}")
+FORM_KEY = re.compile(r"^[A-Za-z0-9_.-]+$")
 IDENTITY_NAMES = {
     "username": "username",
     "user_name": "username",
@@ -36,6 +37,31 @@ def _parse_json_layers(value: str, max_layers: int = 3) -> tuple[Any, bool]:
     return current, parsed
 
 
+def _format_form_urlencoded(value: str) -> str | None:
+    """Format a multi-parameter form body without changing separator semantics."""
+    if "&" not in value:
+        return None
+
+    trailing_separator = value.rstrip().endswith("&")
+    raw_parts = value.strip().split("&")
+    if trailing_separator and raw_parts[-1].strip() == "":
+        raw_parts.pop()
+    if len(raw_parts) < 2:
+        return None
+
+    rendered_parts: list[str] = []
+    for index, raw_part in enumerate(raw_parts):
+        part = raw_part.strip()
+        if "=" not in part:
+            return None
+        key, encoded_value = part.split("=", maxsplit=1)
+        if not FORM_KEY.fullmatch(key):
+            return None
+        separator = "&" if index < len(raw_parts) - 1 or trailing_separator else ""
+        rendered_parts.append(f"{unquote(key)}={unquote(encoded_value)}{separator}")
+    return "\n".join(rendered_parts)
+
+
 def parse_field(value: str | None) -> tuple[ParsedField, Any | None]:
     if value is None:
         return ParsedField(original=None, rendered="N/A", kind="missing"), None
@@ -51,6 +77,19 @@ def parse_field(value: str | None) -> tuple[ParsedField, Any | None]:
                 kind="null" if parsed_value is None else "json",
             ),
             parsed_value,
+        )
+
+    formatted_form = _format_form_urlencoded(value)
+    if formatted_form is not None:
+        decoded = unquote(value) if PERCENT_ENCODED.search(value) else None
+        return (
+            ParsedField(
+                original=value,
+                decoded=decoded,
+                rendered=formatted_form,
+                kind="form-urlencoded",
+            ),
+            None,
         )
 
     decoded = None

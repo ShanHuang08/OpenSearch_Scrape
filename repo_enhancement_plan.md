@@ -15,7 +15,9 @@
 - **產生前過濾**：查詢完成、Markdown render 之前，直接從 `RawScrapeResult.rows` 移除 balance log。
 - **產生後清理**：讀取既有 Markdown，移除指定 log 並重新編號。
 
-兩者應共用相同的精確 URL filter 規則，但不能只實作其中一種。
+產生前的 `--exclude-url` 與產生後的 `--remove-url` 應共用相同的精確 URL
+filter 規則。`--exclude-balance` 因為還需要判斷 `operatorUrl` 與 `error`，
+使用獨立的產生前規則，不能簡化成固定 URL exclusion。
 
 參考檔案：
 
@@ -28,7 +30,7 @@
 
 ### 目的
 
-讓使用者在查詢時直接排除不需要的 `/api/v1/esoterica/balance`，避免這些 log 進入 normalization、Markdown render、Google Sheets 寫入與後續輸出流程。
+讓使用者在查詢時直接排除不需要的 balance API log，避免這些 log 進入 normalization、Markdown render、Google Sheets 寫入與後續輸出流程。
 
 ### 建議使用方式
 
@@ -50,7 +52,17 @@ open-search \
   --exclude-balance
 ```
 
-其中 `--exclude-balance` 等同於 `--exclude-url /api/v1/esoterica/balance`。
+`--exclude-balance` 是獨立的 balance 判斷規則，並不等同於單一
+`--exclude-url`：
+
+1. 優先檢查主 URL；主 URL 包含 `balance` 時直接排除。
+2. 主 URL 不含 `balance` 時，只有 URL 格式剛好是 `/api/v1/<vendor>`
+   （例如 `/api/v1/softgaming`），才 fallback 檢查 Operator URL。
+3. Operator URL 包含 `balance` 且 Error 為空時排除。
+4. 主 URL 是 `/api/v1/<vendor>/<api_name>` 等較深路徑時，不使用
+   Operator URL fallback。
+5. Operator URL 包含 `balance` 但 Error 非空時保留，避免刪除需調查的
+   失敗紀錄。
 
 `--exclude-url` 可重複指定多個 URL；所有 exclude URL 都必須採完整相等比對，不使用 substring。
 
@@ -102,8 +114,9 @@ def filter_rows_by_url(
     rows: Iterable[RawLogRow],
     *,
     excluded_urls: set[str],
+    exclude_balance: bool = False,
 ) -> tuple[list[RawLogRow], dict[str, int]]:
-    """Return rows whose exact URL is not excluded, plus removal counts."""
+    """Apply exact URL exclusions and the balance rule."""
 ```
 
 URL 取自 `RawLogRow.url`，比較前只做 `strip()`；`None` 或空 URL 必須保留並產生可追蹤的 warning，不可因 URL 缺失而誤刪。
@@ -118,7 +131,7 @@ CLI 應將 exclude 設定傳入 `run()`，而不是讓 `normalize_row()` 或 Mar
 原始擷取筆數
 排除筆數
 實際輸出筆數
-排除 URL
+排除條件
 ```
 
 既有 `預期筆數` 可代表 Dashboard 查詢原始結果數；`實際擷取筆數` 建議明確改為 `實際輸出筆數`，避免使用者誤以為輸出的數量未經過濾。若為維持既有格式，至少要新增一行 `排除筆數`。
@@ -133,16 +146,18 @@ CLI 應將 exclude 設定傳入 `run()`，而不是讓 `normalize_row()` 或 Mar
 
 至少新增以下測試：
 
-1. `RawLogRow.url` 等於 `/api/v1/esoterica/balance` 時會被排除。
-2. `/api/v1/esoterica/balance/extra` 不會被誤排除。
-3. `None`、空字串與其他 URL 會保留。
-4. 排除後 records 的順序不變。
-5. 排除後 Markdown 目錄與 heading 從 1 連續編號，不需要後處理。
-6. `--exclude-url` 可重複指定多個 endpoint。
-7. `--exclude-balance` 與完整 `--exclude-url` 行為一致。
-8. Google Sheets writer 只收到過濾後 records。
-9. dry-run 顯示排除設定，但不執行查詢或過濾副作用。
-10. `--no-open-output` 仍然不開啟瀏覽器。
+1. 主 URL 包含 `balance` 時會被排除。
+2. `/api/v1/softgaming` 搭配 Operator URL `/wallet/balance` 且 Error 為空時會被排除。
+3. `/api/v1/softgaming/bet` 不使用 Operator URL fallback。
+4. Operator URL 包含 `balance` 但 Error 非空時會保留。
+5. `None`、空字串與其他 URL 會保留。
+6. 排除後 records 的順序不變。
+7. 排除後 Markdown 目錄與 heading 從 1 連續編號，不需要後處理。
+8. `--exclude-url` 可重複指定多個 endpoint，且仍採完整相等比對。
+9. `--exclude-balance` 與 `--exclude-url` 可同時使用且各自維持語意。
+10. Google Sheets writer 只收到過濾後 records。
+11. dry-run 顯示排除設定，但不執行查詢或過濾副作用。
+12. `--no-open-output` 仍然不開啟瀏覽器。
 
 ## 建議使用方式
 
@@ -324,7 +339,9 @@ open-search clean-markdown INPUT [options]
 
 - 使用一條 CLI 指令可完成 balance log 清理。
 - 使用既有搜尋 CLI 的 `--exclude-balance` 或 `--exclude-url` 時，可在 Markdown 產生前排除 log。
-- 產生前過濾與產生後清理使用相同的 URL 精確比對規則。
+- 產生前 `--exclude-url` 與產生後 `--remove-url` 使用相同的 URL 精確比對規則。
+- `--exclude-balance` 依主 URL 優先、vendor 根路徑 Operator URL fallback
+  與空 Error 條件判斷。
 - 清理後目錄、anchor、heading 編號連續且一致。
 - 參考報告中的 49 -> 20 結果可重現。
 - 原始檔預設保留。
@@ -334,7 +351,7 @@ open-search clean-markdown INPUT [options]
 
 ## 實作順序
 
-1. 抽出共用的 URL 精確比對與 exclusion 設定資料結構。
+1. 抽出 generic URL 精確比對，並建立獨立的 balance exclusion 判斷。
 2. 實作產生前 `filter_rows_by_url()`，接在 scraper rows 與 `normalize_row()` 之間。
 3. 新增搜尋 CLI 的 `--exclude-url`、`--exclude-balance` 與摘要統計。
 4. 建立 Markdown fixture 與 cleanup parser 的資料結構。

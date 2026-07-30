@@ -13,6 +13,7 @@ from sheets import (
     LEGACY_SHEET_HEADERS,
     SHEET_HEADERS,
     GoogleSheetsWriter,
+    _row_alignment_request,
     _value_highlight_requests_for_row,
     record_to_legacy_sheet_row,
     record_to_sheet_row,
@@ -62,6 +63,27 @@ def test_sheet_row_matches_headers() -> None:
     assert row[SHEET_HEADERS.index("environment")] == "QA"
     assert row[SHEET_HEADERS.index("username")] == "user-1"
     assert row[SHEET_HEADERS.index("gameCode")] == "game-2"
+
+
+def test_form_urlencoded_request_body_is_multiline_in_sheet_rows() -> None:
+    record = normalize_row(
+        RawLogRow(
+            requestBody="operation=CREDIT&amount=311&jackpots=%7B%7D&",
+            url="/api/v1/vendor",
+        ),
+        scraped_at=datetime(2026, 7, 19, tzinfo=UTC),
+        environment=resolve_environment("QA"),
+        query='"credit"',
+        time_from="now-1w",
+        time_to="now",
+    )
+    expected = "operation=CREDIT&\namount=311&\njackpots={}&"
+
+    dynamic_row = record_to_sheet_row(record)
+    legacy_row = record_to_legacy_sheet_row(record)
+
+    assert dynamic_row[SHEET_HEADERS.index("requestBody")] == expected
+    assert legacy_row[LEGACY_SHEET_HEADERS.index("requestBody")] == expected
 
 
 def test_worksheet_name_is_derived_from_provider_url() -> None:
@@ -212,6 +234,27 @@ def test_new_dynamic_worksheet_uses_legacy_headers_and_column_widths(
 
 def test_documented_cell_limit_is_explicit() -> None:
     assert GOOGLE_SHEETS_CELL_CHAR_LIMIT == 50_000
+
+
+def test_row_alignment_request_is_left_and_vertically_centered() -> None:
+    request = _row_alignment_request(sheet_id=321, row_number=4, column_count=9)
+    repeat_cell = request["repeatCell"]
+
+    assert repeat_cell["range"] == {
+        "sheetId": 321,
+        "startRowIndex": 3,
+        "endRowIndex": 4,
+        "startColumnIndex": 0,
+        "endColumnIndex": 9,
+    }
+    assert repeat_cell["cell"]["userEnteredFormat"] == {
+        "horizontalAlignment": "LEFT",
+        "verticalAlignment": "MIDDLE",
+    }
+    assert repeat_cell["fields"] == (
+        "userEnteredFormat.horizontalAlignment,"
+        "userEnteredFormat.verticalAlignment"
+    )
 
 
 def test_legacy_sheet_row_matches_existing_target_layout() -> None:
@@ -547,12 +590,23 @@ def test_writer_applies_rich_text_highlighting_to_matching_values(
     assert result.updated == 1
     assert worksheet.appended_rows == []
     requests = spreadsheet.rich_text_updates[0]["requests"]
-    assert [request["updateCells"]["start"]["columnIndex"] for request in requests] == [2, 5]
-    assert all(request["updateCells"]["start"]["rowIndex"] == 1 for request in requests)
+    alignment_requests = [
+        request["repeatCell"] for request in requests if "repeatCell" in request
+    ]
+    assert len(alignment_requests) == 1
+    assert alignment_requests[0]["cell"]["userEnteredFormat"] == {
+        "horizontalAlignment": "LEFT",
+        "verticalAlignment": "MIDDLE",
+    }
+    rich_text_requests = [
+        request["updateCells"] for request in requests if "updateCells" in request
+    ]
+    assert [request["start"]["columnIndex"] for request in rich_text_requests] == [2, 5]
+    assert all(request["start"]["rowIndex"] == 1 for request in rich_text_requests)
     text_format_runs = [
         run
-        for request in requests
-        for run in request["updateCells"]["rows"][0]["values"][0]["textFormatRuns"]
+        for request in rich_text_requests
+        for run in request["rows"][0]["values"][0]["textFormatRuns"]
     ]
     colors = [
         run["format"].get("foregroundColor")

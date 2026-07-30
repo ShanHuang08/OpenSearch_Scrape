@@ -30,6 +30,41 @@ def test_percent_decoding_does_not_convert_plus_to_space() -> None:
     assert field.rendered == "name=hello+world!"
 
 
+def test_form_urlencoded_body_is_decoded_and_split_on_ampersands() -> None:
+    value = (
+        "userId=1e9oetgsxn6a&sessionId=15e2d00c-0a29-4729-807e-2fb9fb050aec&"
+        "operation=CREDIT&amount=311&jackpots=%7B%7D&"
+    )
+
+    field, parsed = parse_field(value)
+
+    assert field.kind == "form-urlencoded"
+    assert field.rendered == (
+        "userId=1e9oetgsxn6a&\n"
+        "sessionId=15e2d00c-0a29-4729-807e-2fb9fb050aec&\n"
+        "operation=CREDIT&\n"
+        "amount=311&\n"
+        "jackpots={}&"
+    )
+    assert field.decoded is not None
+    assert "jackpots={}" in field.decoded
+    assert parsed is None
+
+
+def test_form_urlencoded_body_handles_existing_line_breaks_and_encoded_ampersands() -> None:
+    field, _ = parse_field("operation=CREDIT&\ncomment=a%26b&amount=311")
+
+    assert field.kind == "form-urlencoded"
+    assert field.rendered == "operation=CREDIT&\ncomment=a&b&\namount=311"
+
+
+def test_plain_text_with_ampersand_is_not_treated_as_form_data() -> None:
+    field, _ = parse_field("message=credit approved & balance updated")
+
+    assert field.kind == "text"
+    assert field.rendered == "message=credit approved & balance updated"
+
+
 def test_missing_empty_and_json_null_are_distinct() -> None:
     missing, _ = parse_field(None)
     empty, _ = parse_field("")
@@ -63,4 +98,3 @@ def test_normalize_row_extracts_identity() -> None:
     )
     assert record.username == "user-1"
     assert record.game_code == "game-2"
-

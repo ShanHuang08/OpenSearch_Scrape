@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 
 from config import Settings
 from environments import resolve_environment
+from filtering import filter_rows_by_url, normalize_excluded_urls
 from markdown import render_markdown, write_markdown
 from models import ScrapeResult
 from parsing import normalize_row
@@ -96,6 +97,21 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=200,
         help="最多擷取筆數（預設 200；使用 0 以下會被拒絕）",
+    )
+    parser.add_argument(
+        "--exclude-url",
+        action="append",
+        default=[],
+        metavar="URL",
+        help="依完整 URL 排除 log；可重複指定多個 URL",
+    )
+    parser.add_argument(
+        "--exclude-balance",
+        action="store_true",
+        help=(
+            "排除 balance log：主 URL 含 balance 時排除；主 URL 為 "
+            "/api/v1/<vendor> 時，Operator URL 含 balance 且 Error 為空也排除"
+        ),
     )
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument(
@@ -225,6 +241,7 @@ def run(args: argparse.Namespace) -> int:
     environment = resolve_environment(environment_input)
     if args.max_records is not None and args.max_records < 1:
         raise ValueError("--max-records 必須大於 0。")
+    excluded_urls = normalize_excluded_urls(args.exclude_url)
 
     kql = build_kql(keywords, expression_operator or args.operator)
     discover_url = build_discover_url(
@@ -240,6 +257,12 @@ def run(args: argparse.Namespace) -> int:
     if args.dry_run:
         print(f"KQL: {kql}")
         print(f"OpenSearch URL: {discover_url}")
+        exclusion_filters = [
+            *(["--exclude-balance"] if args.exclude_balance else []),
+            *(f"URL={url}" for url in sorted(excluded_urls)),
+        ]
+        if exclusion_filters:
+            print(f"排除條件: {', '.join(exclusion_filters)}")
         if settings.google_sheets_enabled:
             open_google_spreadsheet(settings.google_spreadsheet_id)
         return 0
@@ -255,6 +278,20 @@ def run(args: argparse.Namespace) -> int:
     if raw_result.expected_total == 0:
         raise ScrapeError("OpenSearch 找不到符合條件的 log。")
 
+    original_fetched_count = len(raw_result.rows)
+    filter_result = filter_rows_by_url(
+        raw_result.rows,
+        excluded_urls=excluded_urls,
+        exclude_balance=args.exclude_balance,
+    )
+    if excluded_urls or args.exclude_balance:
+        print(
+            "URL 排除："
+            f"原始擷取={original_fetched_count}，"
+            f"排除={filter_result.removed_count}，"
+            f"實際輸出={len(filter_result.rows)}"
+        )
+
     # OpenSearch renders newest records first. Reports and downstream writes use
     # chronological order so the Markdown is easier to read from top to bottom.
     records = [
@@ -266,17 +303,23 @@ def run(args: argparse.Namespace) -> int:
             time_from=args.time_from,
             time_to=args.time_to,
         )
-        for row in reversed(raw_result.rows)
+        for row in reversed(filter_result.rows)
     ]
     status = "partial" if raw_result.incomplete_reason else "success"
     result = ScrapeResult(
         records=records,
         expected_total=raw_result.expected_total,
+        original_fetched_count=(
+            original_fetched_count if excluded_urls or args.exclude_balance else None
+        ),
+        excluded_count=filter_result.removed_count,
+        excluded_urls=sorted(excluded_urls),
+        exclude_balance=args.exclude_balance,
         human_time_range=raw_result.human_time_range,
         duplicate_count=raw_result.duplicate_count,
         status=status,
         incomplete_reason=raw_result.incomplete_reason,
-        warnings=raw_result.warnings,
+        warnings=[*raw_result.warnings, *filter_result.warnings],
     )
 
     markdown = render_markdown(

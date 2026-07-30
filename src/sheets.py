@@ -377,6 +377,34 @@ def _value_highlight_requests_for_row(
     return requests
 
 
+def _row_alignment_request(
+    sheet_id: int,
+    row_number: int,
+    column_count: int,
+) -> dict[str, Any]:
+    return {
+        "repeatCell": {
+            "range": {
+                "sheetId": sheet_id,
+                "startRowIndex": row_number - 1,
+                "endRowIndex": row_number,
+                "startColumnIndex": 0,
+                "endColumnIndex": column_count,
+            },
+            "cell": {
+                "userEnteredFormat": {
+                    "horizontalAlignment": "LEFT",
+                    "verticalAlignment": "MIDDLE",
+                }
+            },
+            "fields": (
+                "userEnteredFormat.horizontalAlignment,"
+                "userEnteredFormat.verticalAlignment"
+            ),
+        }
+    }
+
+
 def _legacy_column_width_requests(sheet_id: int) -> list[dict]:
     return [
         {
@@ -540,7 +568,7 @@ class GoogleSheetsWriter:
             if (row_number := key_to_row.get(record.record_key)) is not None
         ]
 
-    def _apply_value_highlighting(
+    def _apply_row_formatting(
         self,
         api_call,
         spreadsheet,
@@ -552,13 +580,16 @@ class GoogleSheetsWriter:
         if sheet_id is None:
             return
 
-        requests = [
-            request
-            for row_number, row in row_targets
-            for request in _value_highlight_requests_for_row(
-                sheet_id, row_number, active_headers, row
+        requests = []
+        for row_number, row in row_targets:
+            requests.append(
+                _row_alignment_request(sheet_id, row_number, len(active_headers))
             )
-        ]
+            requests.extend(
+                _value_highlight_requests_for_row(
+                    sheet_id, row_number, active_headers, row
+                )
+            )
         for chunk in _chunks(requests, self.settings.google_batch_size):
             api_call(spreadsheet.batch_update, {"requests": chunk})
 
@@ -655,7 +686,7 @@ class GoogleSheetsWriter:
                 active_headers,
                 list(zip(records, rows, strict=True)),
             )
-            self._apply_value_highlighting(
+            self._apply_row_formatting(
                 api_call, spreadsheet, worksheet, active_headers, row_targets
             )
             return result
@@ -704,7 +735,7 @@ class GoogleSheetsWriter:
             row_targets.extend(
                 self._locate_row_targets(api_call, worksheet, active_headers, additions)
             )
-        self._apply_value_highlighting(
+        self._apply_row_formatting(
             api_call, spreadsheet, worksheet, active_headers, row_targets
         )
         return result

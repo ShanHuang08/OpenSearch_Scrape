@@ -79,6 +79,8 @@ open-search --env QA --keyword groove or cs123
 --time-from
 --time-to
 --max-records
+--exclude-url URL
+--exclude-balance
 --output-dir
 --headless / --no-headless
 --open-output / --no-open-output
@@ -100,6 +102,22 @@ open-search --env QA --keyword groove or cs123
 | Google Sheets | 關閉 |
 
 未提供 environment 或 keyword 時，CLI 可進入互動輸入。`--dry-run` 只輸出 KQL 與 Discover URL，不登入、不擷取、不寫入報告或 Sheet。
+
+`--exclude-url` 可重複指定，並在 normalization、Markdown render 與 Google
+Sheets 寫入前依 `RawLogRow.url.strip()` 做完整相等比對。
+
+`--exclude-balance` 是獨立的 balance 判斷規則：
+
+1. `RawLogRow.url` 包含 `balance` 時，以主 URL 為準並排除。
+2. 主 URL 不含 `balance` 時，只有精確符合 `/api/v1/<vendor>` 路徑形狀
+   才允許 fallback 到 `operatorUrl`。
+3. fallback 時必須同時符合 `operatorUrl` 包含 `balance` 且 `error`
+   在報告中顯示為空，才可排除。
+4. `/api/v1/<vendor>/<api_name>` 不得使用 Operator URL fallback。
+5. Operator URL 含 `balance` 但 error 非空時必須保留。
+
+未提供排除參數時不得移除任何 log。缺少 URL 或 URL 為空的資料必須保留
+並產生 warning。
 
 ## 5. Keyword 與 KQL
 
@@ -205,7 +223,9 @@ OpenSearch 預設最新資料在前。輸出前必須 reverse，讓 Markdown 與
 3. 必要時執行一次 URL percent decode。
 4. 再嘗試解析 JSON。
 5. JSON 成功時以 2 個空白縮排輸出。
-6. 失敗時保留原文並記錄 warning。
+6. 多參數 `application/x-www-form-urlencoded` 內容（`key=value&...`）每個
+   參數分成一行，保留原有 `&`，並沿用 percent decode；不得把 `+` 轉成空白。
+7. 失敗時保留原文並記錄 warning。
 
 不得把一般 URL 中的 `+` 無條件轉成空白。
 
@@ -327,6 +347,7 @@ username, game code, requestBody, responseBody, url, operatorData, operatorRespo
 - 批次大小可設定，預設 100。
 - API 暫時錯誤採最多 3 次指數退避重試。
 - 單一儲存格超過 50,000 字元時停止 Sheet 寫入，不得靜默截斷。
+- 本次新增或更新的 log 資料列，所有儲存格皆水平靠左、垂直置中。
 - `operatorData.externalTransactionId` 的值若與 `requestBody` 任一參數值相同，兩邊對應 JSON 行文字標為藍色。
 - `operatorData.roundId` 的值若與 `requestBody` 任一參數值相同，兩邊對應 JSON 行文字標為紅色。
 - `operatorData.amount`、`operatorData.betAmount` 或 `operatorData.winAmount` 的值若與 `requestBody` 任一參數值相同，兩邊對應 JSON 行文字標為深綠色。

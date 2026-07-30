@@ -12,7 +12,15 @@ class ParsedField(BaseModel):
     original: str | None
     rendered: str
     decoded: str | None = None
-    kind: Literal["missing", "empty", "null", "json", "text", "url-encoded"]
+    kind: Literal[
+        "missing",
+        "empty",
+        "null",
+        "json",
+        "text",
+        "url-encoded",
+        "form-urlencoded",
+    ]
     warning: str | None = None
 
 
@@ -58,6 +66,10 @@ class LogRecord(BaseModel):
 class ScrapeResult(BaseModel):
     records: list[LogRecord]
     expected_total: int | None = None
+    original_fetched_count: int | None = None
+    excluded_count: int = 0
+    excluded_urls: list[str] = Field(default_factory=list)
+    exclude_balance: bool = False
     human_time_range: str | None = None
     duplicate_count: int = 0
     status: Literal["success", "partial", "failed"] = "success"
