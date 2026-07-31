@@ -16,6 +16,7 @@ dist/
 build/
 *.egg-info/
 output/
+OPENSEARCH_FILTER_NOTES.md
 docs/
 browser-profile/
 playwright/.auth/
